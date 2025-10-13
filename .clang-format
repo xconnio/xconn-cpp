@@ -1,0 +1,23 @@
+BasedOnStyle: Google
+IndentWidth: 4
+UseTab: Never
+ColumnLimit: 120
+SortIncludes: true
+IncludeBlocks: Regroup
+
+IncludeCategories:
+  # 1. C and C++ standard library headers (e.g., <iostream>, <vector>, <string>, <cstdio>)
+  - Regex: '^<([a-zA-Z0-9_]+|[a-zA-Z0-9_]+\.h)>$'
+    Priority: 1
+
+  # 2. Third-party library headers (e.g., <gtest/gtest.h>, <fmt/core.h>)
+  - Regex: '^<.*/.*>$'
+    Priority: 2
+
+  # 3. Project headers within your namespace/directory (e.g., "xconn_cpp/foo.h")
+  - Regex: '^"xconn_cpp/.*"'
+    Priority: 3
+
+  # 4. Other local headers (e.g., "foo.h")
+  - Regex: '^".*"'
+    Priority: 4

@@ -1,0 +1,4 @@
+#ifndef XCONN_CPP_JOINER_H
+#define XCONN_CPP_JOINER_H
+
+#endif  // XCONN_CPP_JOINER_H
