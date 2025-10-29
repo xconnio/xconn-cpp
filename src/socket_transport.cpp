@@ -2,17 +2,18 @@
 
 #include <cstdint>
 #include <iostream>
+#include <memory>
 #include <ostream>
 #include <vector>
 #include <wampproto.h>
 
+#include "xconn_cpp/authenticators.hpp"
 #include "xconn_cpp/base_session.hpp"
 #include "xconn_cpp/session_joiner.hpp"
 #include "xconn_cpp/transports.hpp"
+#include "xconn_cpp/types.hpp"
 #include "xconn_cpp/url_parser.hpp"
 
-#include "wampproto/authenticators/authenticator.h"
-#include "wampproto/dict.h"
 #include "wampproto/session_details.h"
 #include "wampproto/transports/rawsocket.h"
 #include "wampproto/value.h"
@@ -27,13 +28,14 @@ std::shared_ptr<SocketTransport> SocketTransport::Create(std::string& url) {
     return std::make_shared<SocketTransport>(io, parser);
 }
 
-bool SocketTransport::connect(const std::string& host, const std::string& port, SerializerType serializer,
+bool SocketTransport::connect(const std::string& host, const std::string& port, xconn::SerializerType serializer_type,
                               int max_msg_size) {
     try {
         transport_->connect(host, port);
 
         uint8_t hs_request[4];
-        Handshake* hs = handshake_new(serializer, max_msg_size);
+        SerializerType c_serializer_type = (SerializerType)serializer_type;
+        Handshake* hs = handshake_new(c_serializer_type, max_msg_size);
         if (send_handshake(hs, hs_request) != 0) {
             handshake_free(hs);
             return false;
@@ -49,7 +51,7 @@ bool SocketTransport::connect(const std::string& host, const std::string& port, 
 
         int err = 0;
         Handshake* response = receive_handshake(hs_response, &err);
-        if (!response || err != 0 || response->serializer != serializer) {
+        if (!response || err != 0 || response->serializer != c_serializer_type) {
             handshake_free(hs);
             handshake_free(response);
             return false;

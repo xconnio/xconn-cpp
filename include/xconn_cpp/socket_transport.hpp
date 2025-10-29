@@ -5,6 +5,7 @@
 #include <wampproto.h>
 
 #include "xconn_cpp/transports.hpp"
+#include "xconn_cpp/types.hpp"
 #include "xconn_cpp/url_parser.hpp"
 
 #include "wampproto/transports/rawsocket.h"
@@ -18,7 +19,8 @@ class SocketTransport {
     ~SocketTransport();
     static std::shared_ptr<SocketTransport> Create(std::string& url);
 
-    bool connect(const std::string& host, const std::string& port, SerializerType serializer, int max_msg_size);
+    bool connect(const std::string& host, const std::string& port, xconn::SerializerType serializer_type,
+                 int max_msg_size);
     std::vector<uint8_t> read();
     Bytes read_bytes();
     bool write(Bytes& bytes);
@@ -31,3 +33,5 @@ class SocketTransport {
 
     bool recv_exactly(uint8_t* buffer, size_t n);
 };
+
+void run();
