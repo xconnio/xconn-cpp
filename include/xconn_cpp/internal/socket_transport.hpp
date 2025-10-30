@@ -8,7 +8,6 @@
 #include "xconn_cpp/types.hpp"
 #include "xconn_cpp/url_parser.hpp"
 
-#include "wampproto/transports/rawsocket.h"
 #include "wampproto/value.h"
 
 #include <asio.hpp>

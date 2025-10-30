@@ -1,16 +1,13 @@
 #include "xconn_cpp/session_joiner.hpp"
 
 #include <iostream>
+#include <wampproto.h>
 
 #include "xconn_cpp/authenticators.hpp"
-#include "xconn_cpp/base_session.hpp"
-#include "xconn_cpp/socket_transport.hpp"
+#include "xconn_cpp/internal/base_session.hpp"
+#include "xconn_cpp/internal/socket_transport.hpp"
 #include "xconn_cpp/types.hpp"
 #include "xconn_cpp/url_parser.hpp"
-
-#include "wampproto/joiner.h"
-#include "wampproto/transports/rawsocket.h"
-#include "wampproto/value.h"
 
 SessionJoiner::SessionJoiner(xconn::Authenticator authenticator, xconn::SerializerType serializer_type)
     : authenticator_(authenticator), serializer_type_(serializer_type), serializer_(nullptr) {
@@ -31,7 +28,7 @@ SessionJoiner::SessionJoiner(xconn::Authenticator authenticator, xconn::Serializ
 
 SessionJoiner::~SessionJoiner() { free(serializer_); }
 
-BaseSession SessionJoiner::join(std::string& uri, std::string& realm) {
+std::unique_ptr<BaseSession> SessionJoiner::join(std::string& uri, std::string& realm) {
     auto transport = SocketTransport::Create(uri);
     UrlParser parser = parse_url(uri);
 
@@ -48,7 +45,7 @@ BaseSession SessionJoiner::join(std::string& uri, std::string& realm) {
 
         if (to_send.len == 0) {
             std::cout << "Successfully created WAMP Session" << std::endl;
-            return BaseSession(transport, joiner->session_details, serializer_);
+            return std::make_unique<BaseSession>(transport, joiner->session_details, serializer_);
         }
         transport->write(to_send);
     }

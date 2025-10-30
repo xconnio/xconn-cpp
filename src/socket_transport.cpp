@@ -1,4 +1,4 @@
-#include "xconn_cpp/socket_transport.hpp"
+#include "xconn_cpp/internal/socket_transport.hpp"
 
 #include <cstdint>
 #include <iostream>
@@ -7,16 +7,9 @@
 #include <vector>
 #include <wampproto.h>
 
-#include "xconn_cpp/authenticators.hpp"
-#include "xconn_cpp/base_session.hpp"
-#include "xconn_cpp/session_joiner.hpp"
 #include "xconn_cpp/transports.hpp"
 #include "xconn_cpp/types.hpp"
 #include "xconn_cpp/url_parser.hpp"
-
-#include "wampproto/session_details.h"
-#include "wampproto/transports/rawsocket.h"
-#include "wampproto/value.h"
 
 SocketTransport::SocketTransport(asio::io_context& io, UrlParser& url) : transport_(create_transport(io, url)) {}
 

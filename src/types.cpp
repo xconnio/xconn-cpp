@@ -6,7 +6,7 @@
 
 namespace xconn {
 
-// forward declaration
+::Value* to_c_value(const Value& val);
 
 ::Value* to_c_list(const List& list) {
     ::Value* c_list = ::value_list(list.size());

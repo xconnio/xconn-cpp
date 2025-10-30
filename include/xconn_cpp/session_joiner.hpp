@@ -1,10 +1,13 @@
 #pragma once
 
 #include "xconn_cpp/authenticators.hpp"
-#include "xconn_cpp/base_session.hpp"
 #include "xconn_cpp/types.hpp"
 
-#include "wampproto/serializers/serializer.h"
+class BaseSession;
+
+extern "C" {
+typedef struct Serializer Serializer;
+}
 
 constexpr std::size_t MAX_MSG_SIZE = (1 << 24);
 
@@ -13,7 +16,7 @@ class SessionJoiner {
     SessionJoiner(xconn::Authenticator authenticator, xconn::SerializerType serializer_type);
     ~SessionJoiner();
 
-    BaseSession join(std::string& uri, std::string& realm);
+    std::unique_ptr<BaseSession> join(std::string& uri, std::string& realm);
 
    private:
     xconn::Authenticator authenticator_;

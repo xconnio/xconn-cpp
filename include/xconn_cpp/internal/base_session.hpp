@@ -1,9 +1,6 @@
 #pragma once
 
-#include "xconn_cpp/socket_transport.hpp"
-
-#include "wampproto/serializers/serializer.h"
-#include "wampproto/session_details.h"
+#include "xconn_cpp/internal/socket_transport.hpp"
 
 class BaseSession {
    public:
@@ -14,7 +11,6 @@ class BaseSession {
     const char* realm() const;
     const char* authid() const;
     const char* authrole() const;
-    SessionDetails* session_details() const;
 
     // Core methods
     void send(Bytes& bytes);

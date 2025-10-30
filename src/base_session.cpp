@@ -1,9 +1,4 @@
-#include "xconn_cpp/base_session.hpp"
-
-#include "xconn_cpp/socket_transport.hpp"
-
-#include "wampproto/serializers/serializer.h"
-#include "wampproto/value.h"
+#include "xconn_cpp/internal/base_session.hpp"
 
 BaseSession::BaseSession(std::shared_ptr<SocketTransport> transport, SessionDetails* session_details,
                          Serializer* serializer)
@@ -18,8 +13,6 @@ const char* BaseSession::realm() const { return session_details_->realm; }
 const char* BaseSession::authid() const { return session_details_->auth_id; }
 
 const char* BaseSession::authrole() const { return session_details_->auth_role; }
-
-SessionDetails* BaseSession::session_details() const { return session_details_; }
 
 // Send raw bytes to transport
 void BaseSession::send(Bytes& bytes) { transport_->write(bytes); }

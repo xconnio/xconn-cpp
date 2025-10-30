@@ -5,14 +5,11 @@
 #include <variant>
 #include <vector>
 
-#include "wampproto.h"
-
 namespace xconn {
 
 enum class SerializerType { JSON = 1, MSGPACK = 2, CBOR = 3 };
 
 struct Value;  // forward declaration
-::Value* to_c_value(const Value& val);
 
 using Bytes = std::vector<uint8_t>;
 using List = std::vector<Value>;

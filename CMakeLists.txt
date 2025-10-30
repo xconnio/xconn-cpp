@@ -12,7 +12,12 @@ file(GLOB_RECURSE XCONN_CPP_SOURCES src/*.cpp)
 
 # Add the library
 add_library(xconn_cpp STATIC ${XCONN_CPP_SOURCES})
-target_include_directories(xconn_cpp PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+# target_include_directories(xconn_cpp PUBLIC
+# ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_include_directories(
+  xconn_cpp
+  PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/xconn_cpp/internal)
 
 find_program(CLANG_FORMAT_EXE NAMES clang-format)
 if(CLANG_FORMAT_EXE)
@@ -68,7 +73,12 @@ if(XCONN_BUILD_TESTS)
   enable_testing()
 
   add_executable(test_session tests/test_session.cpp)
-  target_link_libraries(test_session PRIVATE xconn_cpp wampproto)
+  target_link_libraries(test_session PRIVATE xconn_cpp)
   target_include_directories(test_session PRIVATE include)
   add_test(NAME test_session COMMAND test_session)
+
+  add_executable(test_base_session tests/test_base_session.cpp)
+  target_link_libraries(test_base_session PRIVATE xconn_cpp wampproto)
+  target_include_directories(test_base_session PRIVATE include)
+  add_test(NAME test_base_session COMMAND test_base_session)
 endif()
