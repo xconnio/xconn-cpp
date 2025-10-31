@@ -1,7 +1,10 @@
 #pragma once
 #include <atomic>
+#include <cstddef>
+#include <future>
 #include <memory>
 #include <string>
+#include <thread>
 
 #include "xconn_cpp/types.hpp"
 
@@ -16,9 +19,18 @@ class BaseSession;
 using namespace xconn;
 
 class Session {
-    Session(std::unique_ptr<BaseSession> base_session);
-
    public:
+    Session(std::unique_ptr<BaseSession> base_session);
+    ~Session();
+
+    int64_t session_id;
+    const std::string realm;
+    const std::string auth_id;
+    const std::string auth_role;
+
+    bool is_connected();
+    int leave();
+
     class CallRequest {
        public:
         explicit CallRequest(std::string uri);
@@ -42,7 +54,9 @@ class Session {
     std::unique_ptr<BaseSession> base_session_;
     wampproto_Session* wamp_session;
     IDGenerator* id_generator;
+    std::thread recv_thread_;
     std::atomic<bool> running_{true};
+    std::promise<int> goodbye_promise;
 
     void send_message(Message* msg);
     void process_incoming_message(Message* msg);
