@@ -14,8 +14,8 @@ std::string ticket = "ticket-pass";
 using namespace xconn;
 
 void test_session_joiner_with_ticket() {
-    TicketAuthenticator authenticator = TicketAuthenticator(ticket_auth_id, ticket, HashMap());
-    SessionJoiner joiner = SessionJoiner(authenticator, xconn::SerializerType::JSON);
+    TicketAuthenticator authenticator = TicketAuthenticator(ticket_auth_id, ticket, Dict_());
+    SessionJoiner joiner = SessionJoiner(authenticator, xconn::SerializerType_::JSON);
     auto session = joiner.join(url, realm);
 
     assert(session->id() > 0);
@@ -25,9 +25,9 @@ std::string wampcra_auth_id = "wamp-cra-user";
 std::string secret = "cra-secret";
 
 void test_session_joiner_with_wampcra() {
-    WAMPCRAAuthenticator authenticator = WAMPCRAAuthenticator(wampcra_auth_id, secret, HashMap());
+    WAMPCRAAuthenticator authenticator = WAMPCRAAuthenticator(wampcra_auth_id, secret, Dict_());
 
-    SessionJoiner joiner = SessionJoiner(authenticator, xconn::SerializerType::CBOR);
+    SessionJoiner joiner = SessionJoiner(authenticator, xconn::SerializerType_::CBOR);
     auto session = joiner.join(url, realm);
 
     assert(session->id() > 0);

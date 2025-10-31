@@ -18,7 +18,7 @@ class SocketTransport {
     ~SocketTransport();
     static std::shared_ptr<SocketTransport> Create(std::string& url);
 
-    bool connect(const std::string& host, const std::string& port, xconn::SerializerType serializer_type,
+    bool connect(const std::string& host, const std::string& port, xconn::SerializerType_ serializer_type,
                  int max_msg_size);
     std::vector<uint8_t> read();
     Bytes read_bytes();

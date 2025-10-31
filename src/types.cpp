@@ -6,29 +6,29 @@
 
 namespace xconn {
 
-::Value* to_c_value(const Value& val);
+Value* to_c_value(const Value_& val);
 
-::Value* to_c_list(const List& list) {
-    ::Value* c_list = ::value_list(list.size());
+Value* to_c_list(const List_& list) {
+    Value* c_list = ::value_list(list.size());
     for (const auto& elem : list) {
-        ::Value* c_val = to_c_value(elem);
+        Value* c_val = to_c_value(elem);
         if (c_val) value_list_append(c_list, c_val);
     }
     return c_list;
 }
 
-::Value* to_c_dict(const HashMap& map) {
-    ::Value* c_dict = ::value_dict();
+Value* to_c_dict(const Dict_& map) {
+    Value* c_dict = ::value_dict();
     for (const auto& [key, val] : map) {
-        ::Value* c_val = to_c_value(val);
+        Value* c_val = to_c_value(val);
         if (c_val) ::value_dict_append(c_dict, key.c_str(), c_val);
     }
     return c_dict;
 }
 
-::Value* to_c_value(const Value& v) {
+Value* to_c_value(const Value_& v) {
     return std::visit(
-        [](auto&& value) -> ::Value* {
+        [](auto&& value) -> Value* {
             using T = std::decay_t<decltype(value)>;
 
             if constexpr (std::is_same_v<T, std::monostate>)
@@ -43,9 +43,9 @@ namespace xconn {
                 return ::value_bool(value ? 1 : 0);
             else if constexpr (std::is_same_v<T, Bytes>)
                 return ::value_bytes(value.data(), value.size());
-            else if constexpr (std::is_same_v<T, std::shared_ptr<List>>)
+            else if constexpr (std::is_same_v<T, std::shared_ptr<List_>>)
                 return value_list_append(::value_list(value->size()), nullptr), to_c_list(*value);
-            else if constexpr (std::is_same_v<T, std::shared_ptr<HashMap>>)
+            else if constexpr (std::is_same_v<T, std::shared_ptr<Dict_>>)
                 return to_c_dict(*value);
             else
                 return ::value_null();

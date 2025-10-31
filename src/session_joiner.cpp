@@ -9,16 +9,16 @@
 #include "xconn_cpp/types.hpp"
 #include "xconn_cpp/url_parser.hpp"
 
-SessionJoiner::SessionJoiner(xconn::Authenticator authenticator, xconn::SerializerType serializer_type)
+SessionJoiner::SessionJoiner(xconn::Authenticator authenticator, xconn::SerializerType_ serializer_type)
     : authenticator_(authenticator), serializer_type_(serializer_type), serializer_(nullptr) {
     switch (serializer_type_) {
-        case xconn::SerializerType::JSON:
+        case xconn::SerializerType_::JSON:
             serializer_ = json_serializer_new();
             break;
-        case xconn::SerializerType::MSGPACK:
+        case xconn::SerializerType_::MSGPACK:
             serializer_ = msgpack_serializer_new();
             break;
-        case xconn::SerializerType::CBOR:
+        case xconn::SerializerType_::CBOR:
             serializer_ = cbor_serializer_new();
             break;
         default:
@@ -26,7 +26,7 @@ SessionJoiner::SessionJoiner(xconn::Authenticator authenticator, xconn::Serializ
     }
 }
 
-SessionJoiner::~SessionJoiner() { free(serializer_); }
+SessionJoiner::~SessionJoiner() {}
 
 std::unique_ptr<BaseSession> SessionJoiner::join(std::string& uri, std::string& realm) {
     auto transport = SocketTransport::Create(uri);

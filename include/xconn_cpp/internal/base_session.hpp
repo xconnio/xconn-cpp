@@ -4,7 +4,9 @@
 
 class BaseSession {
    public:
-    BaseSession(std::shared_ptr<SocketTransport> transport, SessionDetails* session_details, Serializer* serializer);
+    BaseSession(std::shared_ptr<SocketTransport> transport, const SessionDetails* session_details,
+                Serializer* serializer);
+    Serializer* serializer;
 
     std::shared_ptr<SocketTransport> transport() const;
     uint64_t id() const;
@@ -23,6 +25,5 @@ class BaseSession {
 
    private:
     std::shared_ptr<SocketTransport> transport_;
-    SessionDetails* session_details_;
-    Serializer* serializer_;
+    const SessionDetails* session_details_;
 };

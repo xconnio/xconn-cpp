@@ -21,7 +21,7 @@ std::shared_ptr<SocketTransport> SocketTransport::Create(std::string& url) {
     return std::make_shared<SocketTransport>(io, parser);
 }
 
-bool SocketTransport::connect(const std::string& host, const std::string& port, xconn::SerializerType serializer_type,
+bool SocketTransport::connect(const std::string& host, const std::string& port, xconn::SerializerType_ serializer_type,
                               int max_msg_size) {
     try {
         transport_->connect(host, port);
@@ -68,6 +68,7 @@ bool SocketTransport::recv_exactly(uint8_t* buffer, size_t n) {
 }
 
 std::vector<uint8_t> SocketTransport::read() {
+    std::cout << "Socket::read" << std::endl;
     uint8_t header_bytes[4];
     if (!recv_exactly(header_bytes, 4)) return {};
 
