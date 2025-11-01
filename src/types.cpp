@@ -1,11 +1,8 @@
 #include "xconn_cpp/types.hpp"
 
-#include <iostream>
 #include <type_traits>
 
 #include "wampproto.h"
-#include "wampproto/messages/invocation.h"
-#include "wampproto/value.h"
 
 namespace xconn {
 

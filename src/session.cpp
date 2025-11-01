@@ -1,6 +1,5 @@
 #include "xconn_cpp/session.hpp"
 
-#include <chrono>
 #include <exception>
 #include <format>
 #include <future>

@@ -2,7 +2,6 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <future>
 #include <memory>
 #include <mutex>
