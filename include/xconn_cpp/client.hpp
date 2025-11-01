@@ -11,9 +11,9 @@ namespace xconn {
 class Client {
    public:
     Authenticator authenticator;
-    SerializerType_ serializer_type;
+    SerializerType serializer_type;
 
-    Client(Authenticator authenticator, SerializerType_ serializer_type)
+    Client(Authenticator authenticator, SerializerType serializer_type)
         : authenticator(authenticator), serializer_type(serializer_type) {}
 
     ~Client();

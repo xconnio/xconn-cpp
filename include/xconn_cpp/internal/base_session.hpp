@@ -2,6 +2,8 @@
 
 #include "xconn_cpp/internal/socket_transport.hpp"
 
+namespace xconn {
+
 class BaseSession {
    public:
     BaseSession(std::shared_ptr<SocketTransport> transport, const SessionDetails* session_details,
@@ -15,8 +17,8 @@ class BaseSession {
     const char* authrole() const;
 
     // Core methods
-    void send(Bytes& bytes);
-    Bytes receive();
+    void send(::Bytes& bytes);
+    ::Bytes receive();
 
     void send_message(const Message* msg);
     Message* receive_message();
@@ -27,3 +29,5 @@ class BaseSession {
     std::shared_ptr<SocketTransport> transport_;
     const SessionDetails* session_details_;
 };
+
+}  // namespace xconn

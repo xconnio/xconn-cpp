@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+namespace xconn {
+
 UrlParser parse_url(const std::string& url) {
     UrlParser parts;
 
@@ -32,3 +34,5 @@ UrlParser parse_url(const std::string& url) {
 
     return parts;
 }
+
+}  // namespace xconn

@@ -1,9 +1,13 @@
 #include <cassert>
+#include <iostream>
 #include <memory>
+#include <string>
 
 #include "xconn_cpp/authenticators.hpp"
 #include "xconn_cpp/client.hpp"
 #include "xconn_cpp/types.hpp"
+
+using namespace xconn;
 
 void test_client_session_lifecycle();
 
@@ -17,11 +21,14 @@ std::string url = "unix:///tmp/nxt.sock";
 std::string realm = "realm1";
 std::string ticket_auth_id = "ticket-user";
 std::string ticket = "ticket-pass";
+std::string procedure = "io.xconn.backend.add2";
 
 void test_client_session_lifecycle() {
-    auto client = std::make_unique<Client>(TicketAuthenticator(ticket_auth_id, ticket, Dict_()), SerializerType_::JSON);
+    auto client = std::make_unique<Client>(TicketAuthenticator(ticket_auth_id, ticket, Dict()), SerializerType::JSON);
 
     auto session = client->connect(url, realm);
+
+    Result result = session->Call(procedure).Arg(2).Arg(4).Do();
 
     assert(session->session_id > 0);
     assert(session->auth_id == ticket_auth_id);
