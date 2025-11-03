@@ -1,6 +1,7 @@
 #pragma once
 #include <atomic>
 #include <cstddef>
+#include <cstdio>
 #include <future>
 #include <memory>
 #include <string>
@@ -16,6 +17,8 @@ typedef struct Message Message;
 }
 
 namespace xconn {
+
+constexpr int TIMEOUT_SECONDS = 10;
 
 class BaseSession;
 

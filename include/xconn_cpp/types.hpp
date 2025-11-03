@@ -1,4 +1,5 @@
 #pragma once
+#include <future>
 #include <memory>
 #include <optional>
 #include <string>
@@ -80,6 +81,24 @@ struct Value {
 
     bool is_null() const { return std::holds_alternative<std::monostate>(data); }
 };
+
+template <typename T>
+std::optional<std::promise<T>> take_promise_from_map(int64_t request_id,
+                                                     std::unordered_map<uint64_t, std::promise<T>>& promise_map,
+                                                     std::mutex& map_mutex) {
+    std::optional<std::promise<T>> maybe_promise;
+
+    {
+        std::lock_guard<std::mutex> lock(map_mutex);
+        auto it = promise_map.find(request_id);
+        if (it != promise_map.end()) {
+            maybe_promise = std::move(it->second);
+            promise_map.erase(it);
+        }
+    }
+
+    return maybe_promise;
+}
 
 struct Result {
     List args;

@@ -10,9 +10,11 @@
 using namespace xconn;
 
 void test_client_session_lifecycle();
+void test_call_request();
 
 int main() {
     test_client_session_lifecycle();
+    test_call_request();
 
     return 0;
 }
@@ -36,4 +38,16 @@ void test_client_session_lifecycle() {
     session->leave();
 
     assert(!session->is_connected());
+}
+
+void test_call_request() {
+    auto client = std::make_unique<Client>(TicketAuthenticator(ticket_auth_id, ticket, Dict()), SerializerType::JSON);
+
+    auto session = client->connect(url, realm);
+
+    Result r = session->Call(procedure).Arg(2).Arg(4).Do();
+
+    int sum = r.args[0].get_int().value();
+
+    assert(sum == 6);
 }
