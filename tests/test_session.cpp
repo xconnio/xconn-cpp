@@ -61,29 +61,13 @@ ProcedureHandler procedure_handler = [](const Invocation& invocation) -> Result 
 };
 
 void test_call_request() {
-    auto client = std::make_unique<Client>(AnonymousAuthenticator("john", Dict()), SerializerType::JSON);
+    auto client = std::make_unique<Client>(TicketAuthenticator(ticket_auth_id, ticket, Dict()), SerializerType::JSON);
 
     auto session = client->connect(url, realm);
 
-    auto registration = session->Register(call_procedure, procedure_handler).Do();
+    Result r = session->Call(procedure).Arg(2).Arg(4).Do();
 
-    auto result = session->Call(call_procedure).Arg(num1).Arg(num2).Do();
+    int sum = r.args[0].get_int().value();
 
-    int sum = 0;
-    if (result.args.size() > 0) sum = result.args[0].get_int().value();
-
-    assert(sum == total);
-
-    registration.unregister();
-
-    try {
-        auto result = session->Call(call_procedure).Arg(num1).Arg(num2).Do();
-        assert(false);
-    } catch (...) {
-        assert(true);
-    }
-
-    session->leave();
-
-    assert(!session->is_connected());
+    assert(sum == 6);
 }

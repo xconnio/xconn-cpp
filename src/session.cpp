@@ -14,6 +14,9 @@
 #include "xconn_cpp/internal/types.hpp"
 #include "xconn_cpp/types.hpp"
 
+#include "wampproto/messages/error.h"
+#include "wampproto/messages/result.h"
+
 namespace xconn {
 
 Session::Session(std::unique_ptr<BaseSession> base_session)
