@@ -1,6 +1,7 @@
 #pragma once
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <cstdio>
 #include <future>
 #include <memory>
@@ -55,6 +56,23 @@ class Session {
 
     CallRequest Call(const std::string& uri);
 
+    class RegisterRequest {
+       public:
+        RegisterRequest(Session& session, std::string uri, ProcedureHandler handler);
+
+        RegisterRequest& Option(const std::string& key, const xconn::Value& value);
+
+        Registration Do() const;
+
+       private:
+        Session& session_;
+        std::string uri;
+        ProcedureHandler handler_;
+        Dict options;
+    };
+
+    RegisterRequest Register(const std::string& uri, ProcedureHandler handler);
+
    private:
     std::unique_ptr<BaseSession> base_session_;
     wampproto_Session* wamp_session;
@@ -65,6 +83,12 @@ class Session {
 
     std::mutex call_requests_mutex_;
     std::unordered_map<uint64_t, std::promise<Result>> call_requests_;
+
+    std::mutex register_requests_mutex_;
+    std::unordered_map<uint64_t, xconn::RegisterRequest> register_requests_;
+
+    std::mutex registrations_mutex_;
+    std::unordered_map<uint64_t, ProcedureHandler> registrations_;
 
     void send_message(Message* msg);
     void process_incoming_message(Message* msg);

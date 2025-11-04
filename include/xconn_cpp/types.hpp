@@ -1,4 +1,6 @@
 #pragma once
+#include <cstdint>
+#include <functional>
 #include <future>
 #include <memory>
 #include <optional>
@@ -11,7 +13,8 @@ namespace xconn {
 
 enum class SerializerType { JSON = 1, MSGPACK = 2, CBOR = 3 };
 
-struct Value;  // forward declaration
+struct Value;   // forward declaration
+class Session;  // forward declaration
 
 using Bytes = std::vector<uint8_t>;
 using List = std::vector<Value>;
@@ -100,12 +103,57 @@ std::optional<std::promise<T>> take_promise_from_map(int64_t request_id,
     return maybe_promise;
 }
 
+template <typename T>
+std::optional<T> find_from_map(int64_t request_id, std::unordered_map<uint64_t, T>& map, std::mutex& map_mutex,
+                               bool erase) {
+    std::optional<T> maybe;
+
+    {
+        std::lock_guard<std::mutex> lock(map_mutex);
+        auto it = map.find(request_id);
+        if (it != map.end()) {
+            maybe = std::move(it->second);
+            if (erase) map.erase(it);
+        }
+    }
+
+    return maybe;
+}
+
+struct Invocation {
+    List args;
+    Dict kwargs;
+    Dict details;
+
+    Invocation(void* c_invocation);
+};
+
 struct Result {
     List args;
     Dict kwargs;
     Dict details;
 
     Result(void* c_result);
+    Result(const Invocation& invocation);
+};
+
+struct Registration {
+    uint64_t registration_id;
+    Session& session;
+
+    Registration(Session& session, uint64_t registration_id) : session(session), registration_id(registration_id) {}
+
+    void unregister();
+};
+
+using ProcedureHandler = std::function<Result(const Invocation&)>;
+
+struct RegisterRequest {
+    std::promise<Registration> promise;
+    ProcedureHandler handler;
+
+    RegisterRequest(std::promise<Registration> promise, ProcedureHandler handler)
+        : promise(std::move(promise)), handler(std::move(handler)) {}
 };
 
 };  // namespace xconn

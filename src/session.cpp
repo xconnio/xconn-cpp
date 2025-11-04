@@ -14,9 +14,6 @@
 #include "xconn_cpp/internal/types.hpp"
 #include "xconn_cpp/types.hpp"
 
-#include "wampproto/messages/error.h"
-#include "wampproto/messages/result.h"
-
 namespace xconn {
 
 Session::Session(std::unique_ptr<BaseSession> base_session)
@@ -76,6 +73,23 @@ void Session::process_incoming_message(Message* msg) {
             if (maybe_promise.has_value()) maybe_promise->set_value(Result(result));
             break;
         }
+        case MESSAGE_TYPE_REGISTERED: {
+            ::Registered* registered = (::Registered*)msg;
+            int64_t request_id = registered->request_id;
+
+            auto request = find_from_map(request_id, register_requests_, register_requests_mutex_, true);
+
+            if (request.has_value()) {
+                {
+                    std::lock_guard<std::mutex> lock(registrations_mutex_);
+                    registrations_.emplace(registered->registration_id, std::move(request->handler));
+                }
+
+                Registration registeration(*this, registered->registration_id);
+                request->promise.set_value(registeration);
+            }
+            break;
+        }
         case MESSAGE_TYPE_ERROR: {
             ::Error* error = (::Error*)msg;
             std::string invalid_error_message =
@@ -84,14 +98,21 @@ void Session::process_incoming_message(Message* msg) {
 
             std::exception_ptr application_error = std::make_exception_ptr(std::runtime_error(error->uri));
 
+            int64_t request_id = error->request_id;
+
             switch (error->message_type) {
                 case MESSAGE_TYPE_CALL: {
-                    int64_t request_id = error->request_id;
                     auto promise = take_promise_from_map<Result>(request_id, call_requests_, call_requests_mutex_);
 
                     std::exception_ptr exception = promise.has_value() ? application_error : invalid_error;
                     promise->set_exception(exception);
 
+                    break;
+                }
+                case MESSAGE_TYPE_REGISTER: {
+                    auto request = find_from_map(request_id, register_requests_, register_requests_mutex_, true);
+                    std::exception_ptr exception = request.has_value() ? application_error : invalid_error;
+                    request->promise.set_exception(exception);
                     break;
                 }
                 default:
@@ -164,5 +185,37 @@ Result Session::CallRequest::Do() const {
 }
 
 Session::CallRequest Session::Call(const std::string& uri) { return CallRequest(*this, uri); }
+
+Session::RegisterRequest::RegisterRequest(Session& session, const std::string uri, ProcedureHandler handler)
+    : uri(std::move(uri)), session_(session), handler_(std::move(handler)) {}
+
+Session::RegisterRequest& Session::RegisterRequest::Option(const std::string& key, const Value& value) {
+    options[key] = value;
+    return *this;
+}
+
+Registration Session::RegisterRequest::Do() const {
+    ::Dict* regsiter_options = unordered_map_to_dict(options);
+    int64_t request_id = session_.id_generator->next();
+
+    ::Register* r = register_new(request_id, regsiter_options, uri.c_str());
+
+    std::promise<Registration> promise;
+    std::future<Registration> future = promise.get_future();
+
+    xconn::RegisterRequest request(std::move(promise), std::move(handler_));
+    {
+        std::lock_guard<std::mutex> lock(session_.register_requests_mutex_);
+        session_.register_requests_.emplace(request_id, std::move(request));
+    }
+
+    session_.send_message((Message*)r);
+
+    return session_.wait_with_timeout(future, TIMEOUT_SECONDS);
+}
+
+Session::RegisterRequest Session::Register(const std::string& uri, ProcedureHandler handler) {
+    return RegisterRequest(*this, std::move(uri), std::move(handler));
+}
 
 }  // namespace xconn
