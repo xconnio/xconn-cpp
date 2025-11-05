@@ -5,10 +5,12 @@
 #include <cstdio>
 #include <future>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_map>
 
+#include "xconn_cpp/internal/thread_pool.hpp"
 #include "xconn_cpp/types.hpp"
 
 extern "C" {
@@ -22,6 +24,7 @@ namespace xconn {
 constexpr int TIMEOUT_SECONDS = 10;
 
 class BaseSession;
+class ThreadPool;
 
 class Session {
    public:
@@ -73,13 +76,18 @@ class Session {
 
     RegisterRequest Register(const std::string& uri, ProcedureHandler handler);
 
+    void Unregister(uint64_t registration_id);
+
    private:
     std::unique_ptr<BaseSession> base_session_;
     wampproto_Session* wamp_session;
     IDGenerator* id_generator;
+
     std::thread recv_thread_;
     std::atomic<bool> running_{true};
     std::promise<int> goodbye_promise;
+
+    std::unique_ptr<ThreadPool> pool_;
 
     std::mutex call_requests_mutex_;
     std::unordered_map<uint64_t, std::promise<Result>> call_requests_;
@@ -89,6 +97,9 @@ class Session {
 
     std::mutex registrations_mutex_;
     std::unordered_map<uint64_t, ProcedureHandler> registrations_;
+
+    std::mutex unregister_requests_mutex_;
+    std::unordered_map<uint64_t, UnregisterRequest> unregister_requests_;
 
     void send_message(Message* msg);
     void process_incoming_message(Message* msg);

@@ -130,16 +130,16 @@ Result::Result(void* c_result) {
     ::Result* result = (::Result*)c_result;
     args = from_c_list(result->args);
     kwargs = from_c_dict(result->kwargs);
-    details = from_c_dict(result->kwargs);
+    details = from_c_dict(result->details);
 }
 
-Result::Result(const Invocation& invocation) { std::cout << "OKAY RESULT " << std::endl; }
+Result::Result(const Invocation& invocation) {}
 
 Invocation::Invocation(void* c_invocation) {
     ::Invocation* invocation = (::Invocation*)c_invocation;
     args = from_c_list(invocation->args);
     kwargs = from_c_dict(invocation->kwargs);
-    details = from_c_dict(invocation->kwargs);
+    details = from_c_dict(invocation->details);
 }
 
 }  // namespace xconn

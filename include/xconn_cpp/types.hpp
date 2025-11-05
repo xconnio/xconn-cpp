@@ -35,7 +35,13 @@ struct Value {
 
     Value() = default;
 
-    template <typename T>
+    Value(const Value&) = default;
+    Value(Value&&) noexcept = default;
+    Value& operator=(const Value&) = default;
+    Value& operator=(Value&&) noexcept = default;
+
+    template <typename T, typename Decayed = std::decay_t<T>,
+              typename = std::enable_if_t<!std::is_same_v<Decayed, Value> && std::is_constructible_v<VariantType, T>>>
     Value(T&& val) : data(std::forward<T>(val)) {}
 
     Value(int v) : data(v) {}
@@ -154,6 +160,14 @@ struct RegisterRequest {
 
     RegisterRequest(std::promise<Registration> promise, ProcedureHandler handler)
         : promise(std::move(promise)), handler(std::move(handler)) {}
+};
+
+struct UnregisterRequest {
+    std::promise<void> promise;
+    uint64_t registration_id;
+
+    UnregisterRequest(uint64_t registration_id, std::promise<void> promise)
+        : registration_id(registration_id), promise(std::move(promise)) {}
 };
 
 };  // namespace xconn

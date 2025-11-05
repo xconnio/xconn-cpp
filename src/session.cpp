@@ -6,6 +6,7 @@
 #include <future>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <stdexcept>
 
 #include <sys/stat.h>
@@ -24,6 +25,8 @@ Session::Session(std::unique_ptr<BaseSession> base_session)
       auth_role(base_session->authrole()) {
     wamp_session = session_new(base_session_->serializer);
     id_generator = id_generator_new();
+
+    pool_ = std::make_unique<ThreadPool>();
 
     recv_thread_ = std::thread(&Session::wait, this);
 }
@@ -58,6 +61,7 @@ void Session::send_message(Message* msg) {
 }
 
 void Session::process_incoming_message(Message* msg) {
+    std::cout << msg->message_type << std::endl;
     switch (msg->message_type) {
         case MESSAGE_TYPE_GOODBYE: {
             goodbye_promise.set_value(0);
@@ -88,6 +92,42 @@ void Session::process_incoming_message(Message* msg) {
                 Registration registeration(*this, registered->registration_id);
                 request->promise.set_value(registeration);
             }
+            break;
+        }
+        case MESSAGE_TYPE_UNREGISTERED: {
+            ::Unregister* unregister = (::Unregister*)msg;
+            int64_t request_id = unregister->request_id;
+
+            auto request = find_from_map(request_id, unregister_requests_, unregister_requests_mutex_, true);
+            if (request.has_value()) {
+                find_from_map(request->registration_id, registrations_, registrations_mutex_, true);
+                request->promise.set_value();
+            }
+            break;
+        }
+        case MESSAGE_TYPE_INVOCATION: {
+            ::Invocation* invok = (::Invocation*)msg;
+            auto handler = find_from_map(invok->registration_id, registrations_, registrations_mutex_, false);
+            if (handler.has_value()) {
+                Invocation invocation = Invocation(invok);
+                pool_->enqueue([this, handler, invocation = std::move(invocation), invok]() mutable {
+                    try {
+                        Result result = (*handler)(invocation);
+
+                        ::List* yield_args = vector_to_list(result.args);
+                        ::Dict* yield_kwargs = unordered_map_to_dict(result.kwargs);
+                        ::Dict* yield_options = unordered_map_to_dict(result.details);
+
+                        Yield* yield = yield_new(invok->request_id, yield_options, yield_args, yield_kwargs);
+
+                        base_session_->send_message((::Message*)yield);
+                    } catch (const std::exception& e) {
+                        // optional: handle errors gracefully
+                        std::cerr << "Handler execution failed: " << e.what() << std::endl;
+                    }
+                });
+            }
+
             break;
         }
         case MESSAGE_TYPE_ERROR: {
@@ -129,20 +169,19 @@ void Session::process_incoming_message(Message* msg) {
 }
 
 void Session::wait() {
-    try {
-        while (running_) {
+    while (running_) {
+        try {
             Message* msg = base_session_->receive_message();
             if (!msg) continue;
 
             process_incoming_message(msg);
+        } catch (const std::system_error& e) {
+            std::cerr << "System closed the connection" << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "Exception in wait(): " << e.what() << '\n';
+        } catch (...) {
+            std::cerr << "Unknown exception in wait()" << std::endl;
         }
-
-    } catch (const std::system_error& e) {
-        std::cerr << "System closed the connection" << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "Exception in wait(): " << e.what() << '\n';
-    } catch (...) {
-        std::cerr << "Unknown exception in wait()" << std::endl;
     }
 }
 
@@ -214,8 +253,30 @@ Registration Session::RegisterRequest::Do() const {
     return session_.wait_with_timeout(future, TIMEOUT_SECONDS);
 }
 
+void Session::Unregister(uint64_t registration_id) {
+    int64_t request_id = id_generator->next();
+
+    std::promise<void> promise;
+    std::future<void> future = promise.get_future();
+
+    ::Unregister* unregister = unregister_new(request_id, registration_id);
+
+    UnregisterRequest request(registration_id, std::move(promise));
+
+    {
+        std::lock_guard<std::mutex> lock(unregister_requests_mutex_);
+        unregister_requests_.emplace(request_id, std::move(request));
+    }
+
+    send_message((Message*)unregister);
+
+    return wait_with_timeout(future, TIMEOUT_SECONDS);
+}
+
 Session::RegisterRequest Session::Register(const std::string& uri, ProcedureHandler handler) {
     return RegisterRequest(*this, std::move(uri), std::move(handler));
 }
+
+void Registration::unregister() { return session.Unregister(registration_id); }
 
 }  // namespace xconn
