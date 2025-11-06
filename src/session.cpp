@@ -3,6 +3,7 @@
 #include <exception>
 #include <format>
 #include <future>
+#include <ios>
 #include <iostream>
 #include <memory>
 #include <mutex>
@@ -13,6 +14,11 @@
 #include "xconn_cpp/internal/base_session.hpp"
 #include "xconn_cpp/internal/types.hpp"
 #include "xconn_cpp/types.hpp"
+
+#include "wampproto/dict.h"
+#include "wampproto/messages/publish.h"
+#include "wampproto/messages/published.h"
+#include "wampproto/value.h"
 
 namespace xconn {
 
@@ -126,6 +132,15 @@ void Session::process_incoming_message(Message* msg) {
                     }
                 });
             }
+
+            break;
+        }
+        case MESSAGE_TYPE_PUBLISHED: {
+            ::Published* published = (::Published*)msg;
+            int64_t request_id = published->request_id;
+
+            auto maybe_promise = take_promise_from_map<void>(request_id, publish_requests_, publish_requests_mutex_);
+            if (maybe_promise.has_value()) maybe_promise->set_value();
 
             break;
         }
@@ -277,5 +292,56 @@ Session::RegisterRequest Session::Register(const std::string& uri, ProcedureHand
 }
 
 void Registration::unregister() { return session.Unregister(registration_id); }
+
+Session::PublishRequest::PublishRequest(Session& session, const std::string& uri)
+    : session_(session), uri_(std::move(uri)) {}
+
+Session::PublishRequest& Session::PublishRequest::Arg(const Value& arg) {
+    args_.push_back(arg);
+    return *this;
+}
+
+Session::PublishRequest& Session::PublishRequest::Kwarg(const std::string& key, const Value& value) {
+    kwargs_[key] = value;
+    return *this;
+}
+
+Session::PublishRequest& Session::PublishRequest::Option(const std::string& key, const Value& value) {
+    options_[key] = value;
+    return *this;
+}
+
+Session::PublishRequest& Session::PublishRequest::Acknowledge(bool value) {
+    options_["acknowledge"] = value;
+    return *this;
+}
+
+void Session::PublishRequest::Do() const {
+    ::List* publish_args = vector_to_list(args_);
+    ::Dict* publish_kwargs = unordered_map_to_dict(kwargs_);
+    ::Dict* publish_options = unordered_map_to_dict(options_);
+    int64_t request_id = session_.id_generator->next();
+
+    ::Publish* publish = publish_new(request_id, publish_options, uri_.c_str(), publish_args, publish_kwargs);
+
+    std::promise<void> promise;
+    std::future<void> future = promise.get_future();
+
+    auto acknowledge = false;
+
+    auto it = options_.find("acknowledge");
+    if (it != options_.end()) acknowledge = it->second.get_bool().value();
+
+    if (acknowledge) {
+        std::lock_guard<std::mutex> lock(session_.publish_requests_mutex_);
+        session_.publish_requests_.emplace(request_id, std::move(promise));
+    }
+
+    session_.send_message((Message*)publish);
+
+    if (acknowledge) session_.wait_with_timeout(future, TIMEOUT_SECONDS);
+}
+
+Session::PublishRequest Session::Publish(const std::string& uri) { return PublishRequest(*this, std::move(uri)); }
 
 }  // namespace xconn

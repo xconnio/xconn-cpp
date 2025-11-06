@@ -91,6 +91,16 @@ struct Value {
     bool is_null() const { return std::holds_alternative<std::monostate>(data); }
 };
 
+inline std::shared_ptr<List> make_list(std::initializer_list<Value> items) { return std::make_shared<List>(items); }
+
+inline std::shared_ptr<Dict> make_dict(std::initializer_list<std::pair<std::string, Value>> init) {
+    auto dict = std::make_shared<Dict>();
+    for (const auto& [key, val] : init) {
+        dict->emplace(key, val);
+    }
+    return dict;
+}
+
 template <typename T>
 std::optional<std::promise<T>> take_promise_from_map(int64_t request_id,
                                                      std::unordered_map<uint64_t, std::promise<T>>& promise_map,

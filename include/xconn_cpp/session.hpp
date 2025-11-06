@@ -8,6 +8,8 @@
 #include <thread>
 #include <unordered_map>
 
+#include <sys/types.h>
+
 #include "xconn_cpp/internal/thread_pool.hpp"
 #include "xconn_cpp/types.hpp"
 
@@ -76,6 +78,27 @@ class Session {
 
     void Unregister(uint64_t registration_id);
 
+    class PublishRequest {
+       public:
+        PublishRequest(Session& session, const std::string& uri);
+
+        PublishRequest& Arg(const xconn::Value& arg);
+        PublishRequest& Kwarg(const std::string& key, const xconn::Value& value);
+        PublishRequest& Option(const std::string& key, const xconn::Value& value);
+        PublishRequest& Acknowledge(bool value);
+
+        void Do() const;
+
+       private:
+        Session& session_;
+        std::string uri_;
+        List args_;
+        Dict kwargs_;
+        Dict options_;
+    };
+
+    PublishRequest Publish(const std::string& uri);
+
    private:
     std::unique_ptr<BaseSession> base_session_;
     wampproto_Session* wamp_session;
@@ -98,6 +121,9 @@ class Session {
 
     std::mutex unregister_requests_mutex_;
     std::unordered_map<uint64_t, UnregisterRequest> unregister_requests_;
+
+    std::mutex publish_requests_mutex_;
+    std::unordered_map<uint64_t, std::promise<void>> publish_requests_;
 
     void send_message(Message* msg);
     void process_incoming_message(Message* msg);
