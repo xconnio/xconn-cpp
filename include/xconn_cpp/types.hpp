@@ -108,26 +108,8 @@ std::ostream& operator<<(std::ostream& os, const List& list);
 std::ostream& operator<<(std::ostream& os, const Dict& dict);
 
 template <typename T>
-std::optional<std::promise<T>> take_promise_from_map(int64_t request_id,
-                                                     std::unordered_map<uint64_t, std::promise<T>>& promise_map,
-                                                     std::mutex& map_mutex) {
-    std::optional<std::promise<T>> maybe_promise;
-
-    {
-        std::lock_guard<std::mutex> lock(map_mutex);
-        auto it = promise_map.find(request_id);
-        if (it != promise_map.end()) {
-            maybe_promise = std::move(it->second);
-            promise_map.erase(it);
-        }
-    }
-
-    return maybe_promise;
-}
-
-template <typename T>
 std::optional<T> find_from_map(int64_t request_id, std::unordered_map<uint64_t, T>& map, std::mutex& map_mutex,
-                               bool erase) {
+                               bool erase = true) {
     std::optional<T> maybe;
 
     {
@@ -141,6 +123,42 @@ std::optional<T> find_from_map(int64_t request_id, std::unordered_map<uint64_t, 
 
     return maybe;
 }
+
+class ApplicationError : public std::exception {
+   private:
+    std::string message_;
+    List list_;
+    Dict dict_;
+    mutable std::string cached_message_;
+
+   public:
+    ApplicationError(std::string message, List list = {}, Dict dict = {})
+        : message_(std::move(message)), list_(std::move(list)), dict_(std::move(dict)) {}
+
+    const char* what() const noexcept override {
+        try {
+            std::ostringstream oss;
+            oss << message_;
+
+            // Use your existing pretty-printers directly
+            if (!list_.empty()) {
+                oss << ": " << list_;
+            }
+
+            if (!dict_.empty()) {
+                oss << ": " << dict_;
+            }
+
+            cached_message_ = oss.str();
+            return cached_message_.c_str();
+        } catch (...) {
+            return "ApplicationError: (failed to format message)";
+        }
+    }
+
+    const List& list() const noexcept { return list_; }
+    const Dict& dict() const noexcept { return dict_; }
+};
 
 struct Invocation {
     List args;
@@ -210,6 +228,14 @@ struct Subscription {
 struct SubscribeRequest {
     std::promise<Subscription> promise;
     EventHandler handler;
+};
+
+struct UnsubscribeRequest {
+    std::promise<void> promise;
+    uint64_t subscription_id;
+
+    UnsubscribeRequest(uint64_t subscription_id, std::promise<void> promise)
+        : subscription_id(subscription_id), promise(std::move(promise)) {}
 };
 
 };  // namespace xconn

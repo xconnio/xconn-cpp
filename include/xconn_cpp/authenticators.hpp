@@ -26,22 +26,22 @@ class Authenticator {
 
 class AnonymousAuthenticator : public Authenticator {
    public:
-    AnonymousAuthenticator(std::string auth_id, Dict auth_extra);
+    AnonymousAuthenticator(std::string auth_id, Dict auth_extra = Dict());
 };
 
 class TicketAuthenticator : public Authenticator {
    public:
-    TicketAuthenticator(std::string auth_id, std::string ticket, Dict auth_extra);
+    TicketAuthenticator(std::string auth_id, std::string ticket, Dict auth_extra = Dict());
 };
 
 class CryptosignAuthenticator : public Authenticator {
    public:
-    CryptosignAuthenticator(std::string auth_id, std::string private_key_hex, Dict auth_extra);
+    CryptosignAuthenticator(std::string auth_id, std::string private_key_hex, Dict auth_extra = Dict());
 };
 
 class WAMPCRAAuthenticator : public Authenticator {
    public:
-    WAMPCRAAuthenticator(std::string auth_id, std::string secret, Dict auth_extra);
+    WAMPCRAAuthenticator(std::string auth_id, std::string secret, Dict auth_extra = Dict());
 };
 
 };  // namespace xconn

@@ -16,13 +16,6 @@
 #include "xconn_cpp/internal/types.hpp"
 #include "xconn_cpp/types.hpp"
 
-#include "wampproto/dict.h"
-#include "wampproto/messages/publish.h"
-#include "wampproto/messages/published.h"
-#include "wampproto/messages/subscribe.h"
-#include "wampproto/messages/subscribed.h"
-#include "wampproto/value.h"
-
 namespace xconn {
 
 Session::Session(std::unique_ptr<BaseSession> base_session)
@@ -52,6 +45,7 @@ int Session::leave() {
     std::future<int> future = goodbye_promise.get_future();
 
     send_message((Message*)goodbye);
+    goodbye_sent = true;
 
     return wait_with_timeout(future, TIMEOUT_SECONDS);
 }
@@ -69,9 +63,14 @@ void Session::send_message(Message* msg) {
 }
 
 void Session::process_incoming_message(Message* msg) {
-    std::cout << msg->message_type << std::endl;
     switch (msg->message_type) {
         case MESSAGE_TYPE_GOODBYE: {
+            if (!goodbye_sent) {
+                std::string reason = "wamp.close.goodbye_and_out";
+                Goodbye* goodbye = goodbye_new(create_dict(), reason.c_str());
+                send_message((Message*)goodbye);
+                goodbye_sent = true;
+            }
             goodbye_promise.set_value(0);
             running_ = false;
             base_session_->close();
@@ -79,15 +78,15 @@ void Session::process_incoming_message(Message* msg) {
         }
         case MESSAGE_TYPE_RESULT: {
             ::Result* result = (::Result*)msg;
-            int64_t request_id = result->request_id;
+            uint64_t request_id = result->request_id;
 
-            auto maybe_promise = take_promise_from_map<Result>(request_id, call_requests_, call_requests_mutex_);
+            auto maybe_promise = find_from_map(request_id, call_requests_, call_requests_mutex_);
             if (maybe_promise.has_value()) maybe_promise->set_value(Result(result));
             break;
         }
         case MESSAGE_TYPE_REGISTERED: {
             ::Registered* registered = (::Registered*)msg;
-            int64_t request_id = registered->request_id;
+            uint64_t request_id = registered->request_id;
 
             auto request = find_from_map(request_id, register_requests_, register_requests_mutex_, true);
 
@@ -104,7 +103,7 @@ void Session::process_incoming_message(Message* msg) {
         }
         case MESSAGE_TYPE_UNREGISTERED: {
             ::Unregister* unregister = (::Unregister*)msg;
-            int64_t request_id = unregister->request_id;
+            uint64_t request_id = unregister->request_id;
 
             auto request = find_from_map(request_id, unregister_requests_, unregister_requests_mutex_, true);
             if (request.has_value()) {
@@ -129,9 +128,19 @@ void Session::process_incoming_message(Message* msg) {
                         Yield* yield = yield_new(invok->request_id, yield_options, yield_args, yield_kwargs);
 
                         base_session_->send_message((::Message*)yield);
+                    } catch (const ApplicationError& e) {
+                        ::List* args = vector_to_list(e.list());
+                        ::Dict* kwargs = unordered_map_to_dict(e.dict());
+
+                        ::Error* error = error_new(invok->base.message_type, invok->request_id, create_dict(),
+                                                   ERROR_RUNTIME_ERROR, args, kwargs);
+
+                        base_session_->send_message((::Message*)error);
                     } catch (const std::exception& e) {
-                        // optional: handle errors gracefully
-                        std::cerr << "Registration Handler execution failed: " << e.what() << std::endl;
+                        ::Error* error = error_new(invok->base.message_type, invok->request_id, NULL,
+                                                   ERROR_RUNTIME_ERROR, NULL, NULL);
+
+                        base_session_->send_message((::Message*)error);
                     }
                 });
             }
@@ -140,16 +149,16 @@ void Session::process_incoming_message(Message* msg) {
         }
         case MESSAGE_TYPE_PUBLISHED: {
             ::Published* published = (::Published*)msg;
-            int64_t request_id = published->request_id;
+            uint64_t request_id = published->request_id;
 
-            auto maybe_promise = take_promise_from_map<void>(request_id, publish_requests_, publish_requests_mutex_);
+            auto maybe_promise = find_from_map(request_id, publish_requests_, publish_requests_mutex_);
             if (maybe_promise.has_value()) maybe_promise->set_value();
 
             break;
         }
         case MESSAGE_TYPE_SUBSCRIBED: {
             ::Subscribed* subscribed = (::Subscribed*)msg;
-            int64_t request_id = subscribed->request_id;
+            uint64_t request_id = subscribed->request_id;
             auto request = find_from_map(request_id, subscribe_requests_, subscribe_requests_mutex_, true);
             if (request.has_value()) {
                 std::lock_guard<std::mutex> lock(subscriptions_mutex_);
@@ -163,7 +172,7 @@ void Session::process_incoming_message(Message* msg) {
         }
         case MESSAGE_TYPE_EVENT: {
             ::Event* c_event = (::Event*)msg;
-            int64_t subscription_id = c_event->subscription_id;
+            uint64_t subscription_id = c_event->subscription_id;
 
             auto handler = find_from_map(subscription_id, subscriptions_, subscriptions_mutex_, false);
             if (handler) {
@@ -177,25 +186,40 @@ void Session::process_incoming_message(Message* msg) {
                     }
                 });
             }
-            std::cout << "FREEING C_EVENT" << std::endl;
-            c_event->base.free((Message*)c_event);
-            std::cout << "FREEING C_EVENT" << std::endl;
 
+            msg->free(msg);
+            break;
+        }
+        case MESSAGE_TYPE_UNSUBSCRIBED: {
+            ::Unsubscribed* unsubscribed = (::Unsubscribed*)msg;
+            uint64_t request_id = unsubscribed->request_id;
+
+            auto request = find_from_map(request_id, unsubscribe_requests_, unsubscribe_requests_mutex_, true);
+            if (request) request->promise.set_value();
+
+            msg->free(msg);
+            break;
+        }
+        case MESSAGE_TYPE_ABORT: {
             break;
         }
         case MESSAGE_TYPE_ERROR: {
             ::Error* error = (::Error*)msg;
+
             std::string invalid_error_message =
                 std::format("Received {} message for invalid request ID", error->message_type);
+
             std::exception_ptr invalid_error = std::make_exception_ptr(std::runtime_error(invalid_error_message));
 
-            std::exception_ptr application_error = std::make_exception_ptr(std::runtime_error(error->uri));
+            auto app_error = ApplicationError(error->uri, from_c_list(error->args), from_c_dict(error->kwargs));
 
-            int64_t request_id = error->request_id;
+            std::exception_ptr application_error = std::make_exception_ptr(std::runtime_error(app_error.what()));
+
+            uint64_t request_id = error->request_id;
 
             switch (error->message_type) {
                 case MESSAGE_TYPE_CALL: {
-                    auto promise = take_promise_from_map<Result>(request_id, call_requests_, call_requests_mutex_);
+                    auto promise = find_from_map(request_id, call_requests_, call_requests_mutex_);
 
                     std::exception_ptr exception = promise.has_value() ? application_error : invalid_error;
                     promise->set_exception(exception);
@@ -203,7 +227,35 @@ void Session::process_incoming_message(Message* msg) {
                     break;
                 }
                 case MESSAGE_TYPE_REGISTER: {
-                    auto request = find_from_map(request_id, register_requests_, register_requests_mutex_, true);
+                    auto request = find_from_map(request_id, register_requests_, register_requests_mutex_);
+                    std::exception_ptr exception = request.has_value() ? application_error : invalid_error;
+                    request->promise.set_exception(exception);
+                    break;
+                }
+                case MESSAGE_TYPE_UNREGISTER: {
+                    auto request = find_from_map(request_id, unregister_requests_, unregister_requests_mutex_);
+
+                    std::exception_ptr exception = request.has_value() ? application_error : invalid_error;
+                    request->promise.set_exception(exception);
+                    break;
+                }
+                case MESSAGE_TYPE_PUBLISH: {
+                    auto promise = find_from_map(request_id, publish_requests_, publish_requests_mutex_);
+
+                    std::exception_ptr exception = promise.has_value() ? application_error : invalid_error;
+                    promise->set_exception(exception);
+                    break;
+                }
+                case MESSAGE_TYPE_SUBSCRIBE: {
+                    auto request = find_from_map(request_id, subscribe_requests_, subscribe_requests_mutex_);
+
+                    std::exception_ptr exception = request.has_value() ? application_error : invalid_error;
+                    request->promise.set_exception(exception);
+                    break;
+                }
+                case MESSAGE_TYPE_UNSUBSCRIBE: {
+                    auto request = find_from_map(request_id, unsubscribe_requests_, unsubscribe_requests_mutex_);
+
                     std::exception_ptr exception = request.has_value() ? application_error : invalid_error;
                     request->promise.set_exception(exception);
                     break;
@@ -238,30 +290,31 @@ void Session::wait() {
     }
 }
 
-Session::CallRequest::CallRequest(Session& session, const std::string uri) : uri(std::move(uri)), session_(session) {}
+Session::CallRequest::CallRequest(Session& session, std::string procedure)
+    : procedure_(std::move(procedure)), session_(session) {}
 
-Session::CallRequest& Session::CallRequest::Arg(const Value& arg) {
-    args.push_back(arg);
+Session::CallRequest& Session::CallRequest::Arg(Value arg) {
+    args_.push_back(std::move(arg));
     return *this;
 }
 
-Session::CallRequest& Session::CallRequest::Kwarg(const std::string& key, const Value& value) {
-    kwargs[key] = value;
+Session::CallRequest& Session::CallRequest::Kwarg(std::string key, Value value) {
+    kwargs_[std::move(key)] = std::move(value);
     return *this;
 }
 
-Session::CallRequest& Session::CallRequest::Option(const std::string& key, const Value& value) {
-    options[key] = value;
+Session::CallRequest& Session::CallRequest::Option(std::string key, Value value) {
+    options_[std::move(key)] = std::move(value);
     return *this;
 }
 
 Result Session::CallRequest::Do() const {
-    ::List* call_args = vector_to_list(args);
-    ::Dict* call_kwargs = unordered_map_to_dict(kwargs);
-    ::Dict* call_options = unordered_map_to_dict(options);
-    int64_t request_id = session_.id_generator->next();
+    ::List* call_args = vector_to_list(args_);
+    ::Dict* call_kwargs = unordered_map_to_dict(kwargs_);
+    ::Dict* call_options = unordered_map_to_dict(options_);
+    uint64_t request_id = session_.id_generator->next();
 
-    ::Call* call = call_new(request_id, call_options, uri.c_str(), call_args, call_kwargs);
+    ::Call* call = call_new(request_id, call_options, procedure_.c_str(), call_args, call_kwargs);
 
     std::promise<Result> promise;
     std::future<Result> future = promise.get_future();
@@ -276,26 +329,26 @@ Result Session::CallRequest::Do() const {
     return session_.wait_with_timeout(future, TIMEOUT_SECONDS);
 }
 
-Session::CallRequest Session::Call(const std::string& uri) { return CallRequest(*this, uri); }
+Session::CallRequest Session::Call(std::string procedure) { return CallRequest(*this, std::move(procedure)); }
 
-Session::RegisterRequest::RegisterRequest(Session& session, const std::string uri, ProcedureHandler handler)
-    : uri(std::move(uri)), session_(session), handler_(std::move(handler)) {}
+Session::RegisterRequest::RegisterRequest(Session& session, const std::string procedure, ProcedureHandler handler)
+    : procedure_(std::move(procedure)), session_(session), handler_(std::move(handler)) {}
 
-Session::RegisterRequest& Session::RegisterRequest::Option(const std::string& key, const Value& value) {
-    options[key] = value;
+Session::RegisterRequest& Session::RegisterRequest::Option(std::string key, Value value) {
+    options[std::move(key)] = std::move(value);
     return *this;
 }
 
 Registration Session::RegisterRequest::Do() const {
     ::Dict* regsiter_options = unordered_map_to_dict(options);
-    int64_t request_id = session_.id_generator->next();
+    uint64_t request_id = session_.id_generator->next();
 
-    ::Register* r = register_new(request_id, regsiter_options, uri.c_str());
+    ::Register* r = register_new(request_id, regsiter_options, procedure_.c_str());
 
     std::promise<Registration> promise;
     std::future<Registration> future = promise.get_future();
 
-    xconn::RegisterRequest request(std::move(promise), std::move(handler_));
+    xconn::RegisterRequest request(std::move(promise), handler_);
     {
         std::lock_guard<std::mutex> lock(session_.register_requests_mutex_);
         session_.register_requests_.emplace(request_id, std::move(request));
@@ -307,14 +360,14 @@ Registration Session::RegisterRequest::Do() const {
 }
 
 void Session::Unregister(uint64_t registration_id) {
-    int64_t request_id = id_generator->next();
+    uint64_t request_id = id_generator->next();
 
     std::promise<void> promise;
     std::future<void> future = promise.get_future();
 
     ::Unregister* unregister = unregister_new(request_id, registration_id);
 
-    UnregisterRequest request(registration_id, std::move(promise));
+    auto request = UnregisterRequest(registration_id, std::move(promise));
 
     {
         std::lock_guard<std::mutex> lock(unregister_requests_mutex_);
@@ -326,32 +379,32 @@ void Session::Unregister(uint64_t registration_id) {
     return wait_with_timeout(future, TIMEOUT_SECONDS);
 }
 
-Session::RegisterRequest Session::Register(const std::string& uri, ProcedureHandler handler) {
-    return RegisterRequest(*this, std::move(uri), std::move(handler));
+Session::RegisterRequest Session::Register(std::string procedure, ProcedureHandler handler) {
+    return RegisterRequest(*this, std::move(procedure), std::move(handler));
 }
 
 void Registration::unregister() { return session.Unregister(registration_id); }
 
-Session::PublishRequest::PublishRequest(Session& session, const std::string& uri)
-    : session_(session), uri_(std::move(uri)) {}
+Session::PublishRequest::PublishRequest(Session& session, std::string topic)
+    : session_(session), topic_(std::move(topic)) {}
 
-Session::PublishRequest& Session::PublishRequest::Arg(const Value& arg) {
-    args_.push_back(arg);
+Session::PublishRequest& Session::PublishRequest::Arg(Value arg) {
+    args_.push_back(std::move(arg));
     return *this;
 }
 
-Session::PublishRequest& Session::PublishRequest::Kwarg(const std::string& key, const Value& value) {
-    kwargs_[key] = value;
+Session::PublishRequest& Session::PublishRequest::Kwarg(std::string key, Value value) {
+    kwargs_[std::move(key)] = std::move(value);
     return *this;
 }
 
-Session::PublishRequest& Session::PublishRequest::Option(const std::string& key, const Value& value) {
-    options_[key] = value;
+Session::PublishRequest& Session::PublishRequest::Option(std::string key, Value value) {
+    options_[std::move(key)] = std::move(value);
     return *this;
 }
 
 Session::PublishRequest& Session::PublishRequest::Acknowledge(bool value) {
-    options_["acknowledge"] = value;
+    options_["acknowledge"] = std::move(value);
     return *this;
 }
 
@@ -359,9 +412,9 @@ void Session::PublishRequest::Do() const {
     ::List* publish_args = vector_to_list(args_);
     ::Dict* publish_kwargs = unordered_map_to_dict(kwargs_);
     ::Dict* publish_options = unordered_map_to_dict(options_);
-    int64_t request_id = session_.id_generator->next();
+    uint64_t request_id = session_.id_generator->next();
 
-    ::Publish* publish = publish_new(request_id, publish_options, uri_.c_str(), publish_args, publish_kwargs);
+    ::Publish* publish = publish_new(request_id, publish_options, topic_.c_str(), publish_args, publish_kwargs);
 
     std::promise<void> promise;
     std::future<void> future = promise.get_future();
@@ -381,7 +434,7 @@ void Session::PublishRequest::Do() const {
     if (acknowledge) session_.wait_with_timeout(future, TIMEOUT_SECONDS);
 }
 
-Session::PublishRequest Session::Publish(const std::string& uri) { return PublishRequest(*this, std::move(uri)); }
+Session::PublishRequest Session::Publish(std::string topic) { return PublishRequest(*this, std::move(topic)); }
 
 Session::SubscribeRequest::SubscribeRequest(Session& session, std::string topic, EventHandler handler)
     : session_(session), topic_(std::move(topic)), handler_(std::move(handler)) {}
@@ -393,7 +446,7 @@ Session::SubscribeRequest& Session::SubscribeRequest::Option(std::string key, xc
 
 Subscription Session::SubscribeRequest::Do() const {
     ::Dict* options = unordered_map_to_dict(options_);
-    int64_t request_id = session_.id_generator->next();
+    uint64_t request_id = session_.id_generator->next();
 
     ::Subscribe* subscribe = subscribe_new(request_id, options, topic_.c_str());
 
@@ -414,5 +467,27 @@ Subscription Session::SubscribeRequest::Do() const {
 Session::SubscribeRequest Session::Subscribe(std::string topic, EventHandler handler) {
     return SubscribeRequest(*this, std::move(topic), std::move(handler));
 }
+
+void Session::Unsubscribe(uint64_t subscription_id) {
+    uint64_t request_id = id_generator->next();
+
+    std::promise<void> promise;
+    std::future<void> future = promise.get_future();
+
+    ::Unsubscribe* unsubscribe = unsubscribe_new(request_id, subscription_id);
+
+    auto request = UnsubscribeRequest(subscription_id, std::move(promise));
+
+    {
+        std::lock_guard<std::mutex> lock(unsubscribe_requests_mutex_);
+        unsubscribe_requests_.emplace(request_id, std::move(request));
+    }
+
+    send_message((Message*)unsubscribe);
+
+    return wait_with_timeout(future, TIMEOUT_SECONDS);
+}
+
+void Subscription::unsubscribe() { return session.Unsubscribe(subscription_id); }
 
 }  // namespace xconn

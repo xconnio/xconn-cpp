@@ -22,6 +22,7 @@ typedef struct Message Message;
 namespace xconn {
 
 constexpr int TIMEOUT_SECONDS = 10;
+constexpr const char* ERROR_RUNTIME_ERROR = "wamp.error.runtime_error";
 
 class BaseSession;
 class ThreadPool;
@@ -43,61 +44,61 @@ class Session {
        public:
         CallRequest(Session& session, std::string uri);
 
-        CallRequest& Arg(const xconn::Value& arg);
-        CallRequest& Kwarg(const std::string& key, const xconn::Value& value);
-        CallRequest& Option(const std::string& key, const xconn::Value& value);
+        CallRequest& Arg(xconn::Value arg);
+        CallRequest& Kwarg(std::string key, xconn::Value value);
+        CallRequest& Option(std::string key, xconn::Value value);
 
         Result Do() const;
 
        private:
         Session& session_;
-        std::string uri;
-        List args;
-        Dict kwargs;
-        Dict options;
+        std::string procedure_;
+        List args_;
+        Dict kwargs_;
+        Dict options_;
     };
 
-    CallRequest Call(const std::string& uri);
+    CallRequest Call(std::string uri);
 
     class RegisterRequest {
        public:
         RegisterRequest(Session& session, std::string uri, ProcedureHandler handler);
 
-        RegisterRequest& Option(const std::string& key, const xconn::Value& value);
+        RegisterRequest& Option(std::string key, xconn::Value value);
 
         Registration Do() const;
 
        private:
         Session& session_;
-        std::string uri;
+        std::string procedure_;
         ProcedureHandler handler_;
         Dict options;
     };
 
-    RegisterRequest Register(const std::string& uri, ProcedureHandler handler);
+    RegisterRequest Register(std::string procedure, ProcedureHandler handler);
 
     void Unregister(uint64_t registration_id);
 
     class PublishRequest {
        public:
-        PublishRequest(Session& session, const std::string& uri);
+        PublishRequest(Session& session, std::string uri);
 
-        PublishRequest& Arg(const xconn::Value& arg);
-        PublishRequest& Kwarg(const std::string& key, const xconn::Value& value);
-        PublishRequest& Option(const std::string& key, const xconn::Value& value);
+        PublishRequest& Arg(xconn::Value arg);
+        PublishRequest& Kwarg(std::string key, xconn::Value value);
+        PublishRequest& Option(std::string key, xconn::Value value);
         PublishRequest& Acknowledge(bool value);
 
         void Do() const;
 
        private:
         Session& session_;
-        std::string uri_;
+        std::string topic_;
         List args_;
         Dict kwargs_;
         Dict options_;
     };
 
-    PublishRequest Publish(const std::string& uri);
+    PublishRequest Publish(std::string topic);
 
     class SubscribeRequest {
        public:
@@ -125,7 +126,9 @@ class Session {
 
     std::thread recv_thread_;
     std::atomic<bool> running_{true};
+
     std::promise<int> goodbye_promise;
+    std::atomic<bool> goodbye_sent{false};
 
     std::unique_ptr<ThreadPool> pool_;
 
@@ -149,6 +152,9 @@ class Session {
 
     std::mutex subscriptions_mutex_;
     std::unordered_map<uint64_t, EventHandler> subscriptions_;
+
+    std::mutex unsubscribe_requests_mutex_;
+    std::unordered_map<uint64_t, UnsubscribeRequest> unsubscribe_requests_;
 
     void send_message(Message* msg);
     void process_incoming_message(Message* msg);

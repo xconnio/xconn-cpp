@@ -99,7 +99,8 @@ std::vector<uint8_t> SocketTransport::read() {
 bool SocketTransport::write(::Bytes& bytes) {
     std::lock_guard<std::mutex> lock(write_mutex_);
 
-    std::cout << bytes.data << std::endl;
+    // DEBUG LOGS MESSAGES
+    // std::cout << bytes.data << std::endl;
 
     MessageType MSG_TYPE_WAMP = MESSAGE_WAMP;
     MessageHeader* header = message_header_new(MSG_TYPE_WAMP, bytes.len);

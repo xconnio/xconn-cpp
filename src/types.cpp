@@ -123,35 +123,6 @@ Value from_c_value(const ::Value* v) {
     }
 }
 
-Result::Result(void* c_result) {
-    ::Result* result = (::Result*)c_result;
-    args = from_c_list(result->args);
-    kwargs = from_c_dict(result->kwargs);
-    details = from_c_dict(result->details);
-}
-
-Result::Result(const Invocation& invocation) {}
-
-Invocation::Invocation(void* c_invocation) {
-    ::Invocation* invocation = (::Invocation*)c_invocation;
-    args = from_c_list(invocation->args);
-    kwargs = from_c_dict(invocation->kwargs);
-    details = from_c_dict(invocation->details);
-}
-
-Event::Event(void* c_event) {
-    ::Event* event = (::Event*)c_event;
-    args = from_c_list(event->args);
-    kwargs = from_c_dict(event->kwargs);
-    details = from_c_dict(event->details);
-}
-
-// Forward declarations (needed for mutual references)
-std::ostream& operator<<(std::ostream& os, const Value& v);
-std::ostream& operator<<(std::ostream& os, const List& list);
-std::ostream& operator<<(std::ostream& os, const Dict& dict);
-
-// --- Pretty-print List ---
 std::ostream& operator<<(std::ostream& os, const List& list) {
     os << "[";
     bool first = true;
@@ -204,6 +175,29 @@ std::ostream& operator<<(std::ostream& os, const Value& v) {
         },
         v.data);
     return os;
+}
+
+Result::Result(void* c_result) {
+    ::Result* result = (::Result*)c_result;
+    args = from_c_list(result->args);
+    kwargs = from_c_dict(result->kwargs);
+    details = from_c_dict(result->details);
+}
+
+Result::Result(const Invocation& invocation) {}
+
+Invocation::Invocation(void* c_invocation) {
+    ::Invocation* invocation = (::Invocation*)c_invocation;
+    args = from_c_list(invocation->args);
+    kwargs = from_c_dict(invocation->kwargs);
+    details = from_c_dict(invocation->details);
+}
+
+Event::Event(void* c_event) {
+    ::Event* event = (::Event*)c_event;
+    args = from_c_list(event->args);
+    kwargs = from_c_dict(event->kwargs);
+    details = from_c_dict(event->details);
 }
 
 }  // namespace xconn
