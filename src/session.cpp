@@ -1,13 +1,14 @@
 #include "xconn_cpp/session.hpp"
 
+#include <cstdint>
 #include <exception>
 #include <format>
 #include <future>
-#include <ios>
 #include <iostream>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
+#include <string>
 
 #include <sys/stat.h>
 
@@ -18,6 +19,8 @@
 #include "wampproto/dict.h"
 #include "wampproto/messages/publish.h"
 #include "wampproto/messages/published.h"
+#include "wampproto/messages/subscribe.h"
+#include "wampproto/messages/subscribed.h"
 #include "wampproto/value.h"
 
 namespace xconn {
@@ -128,7 +131,7 @@ void Session::process_incoming_message(Message* msg) {
                         base_session_->send_message((::Message*)yield);
                     } catch (const std::exception& e) {
                         // optional: handle errors gracefully
-                        std::cerr << "Handler execution failed: " << e.what() << std::endl;
+                        std::cerr << "Registration Handler execution failed: " << e.what() << std::endl;
                     }
                 });
             }
@@ -141,6 +144,42 @@ void Session::process_incoming_message(Message* msg) {
 
             auto maybe_promise = take_promise_from_map<void>(request_id, publish_requests_, publish_requests_mutex_);
             if (maybe_promise.has_value()) maybe_promise->set_value();
+
+            break;
+        }
+        case MESSAGE_TYPE_SUBSCRIBED: {
+            ::Subscribed* subscribed = (::Subscribed*)msg;
+            int64_t request_id = subscribed->request_id;
+            auto request = find_from_map(request_id, subscribe_requests_, subscribe_requests_mutex_, true);
+            if (request.has_value()) {
+                std::lock_guard<std::mutex> lock(subscriptions_mutex_);
+                subscriptions_.emplace(subscribed->subscription_id, std::move(request->handler));
+            }
+
+            auto subscription = Subscription(*this, subscribed->subscription_id);
+
+            request->promise.set_value(subscription);
+            break;
+        }
+        case MESSAGE_TYPE_EVENT: {
+            ::Event* c_event = (::Event*)msg;
+            int64_t subscription_id = c_event->subscription_id;
+
+            auto handler = find_from_map(subscription_id, subscriptions_, subscriptions_mutex_, false);
+            if (handler) {
+                Event event = Event(c_event);
+
+                pool_->enqueue([this, handler, event]() mutable {
+                    try {
+                        handler->operator()(event);
+                    } catch (const std::exception& e) {
+                        std::cerr << "Subscription Handler execution failed: " << e.what() << std::endl;
+                    }
+                });
+            }
+            std::cout << "FREEING C_EVENT" << std::endl;
+            c_event->base.free((Message*)c_event);
+            std::cout << "FREEING C_EVENT" << std::endl;
 
             break;
         }
@@ -343,5 +382,37 @@ void Session::PublishRequest::Do() const {
 }
 
 Session::PublishRequest Session::Publish(const std::string& uri) { return PublishRequest(*this, std::move(uri)); }
+
+Session::SubscribeRequest::SubscribeRequest(Session& session, std::string topic, EventHandler handler)
+    : session_(session), topic_(std::move(topic)), handler_(std::move(handler)) {}
+
+Session::SubscribeRequest& Session::SubscribeRequest::Option(std::string key, xconn::Value value) {
+    options_[std::move(key)] = std::move(value);
+    return *this;
+}
+
+Subscription Session::SubscribeRequest::Do() const {
+    ::Dict* options = unordered_map_to_dict(options_);
+    int64_t request_id = session_.id_generator->next();
+
+    ::Subscribe* subscribe = subscribe_new(request_id, options, topic_.c_str());
+
+    std::promise<Subscription> promise;
+    std::future<Subscription> future = promise.get_future();
+
+    auto request = xconn::SubscribeRequest(std::move(promise), handler_);
+    {
+        std::lock_guard<std::mutex> lock(session_.subscribe_requests_mutex_);
+        session_.subscribe_requests_.emplace(request_id, std::move(request));
+    }
+
+    session_.send_message((Message*)subscribe);
+
+    return session_.wait_with_timeout(future, TIMEOUT_SECONDS);
+}
+
+Session::SubscribeRequest Session::Subscribe(std::string topic, EventHandler handler) {
+    return SubscribeRequest(*this, std::move(topic), std::move(handler));
+}
 
 }  // namespace xconn

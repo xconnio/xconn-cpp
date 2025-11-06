@@ -139,4 +139,71 @@ Invocation::Invocation(void* c_invocation) {
     details = from_c_dict(invocation->details);
 }
 
+Event::Event(void* c_event) {
+    ::Event* event = (::Event*)c_event;
+    args = from_c_list(event->args);
+    kwargs = from_c_dict(event->kwargs);
+    details = from_c_dict(event->details);
+}
+
+// Forward declarations (needed for mutual references)
+std::ostream& operator<<(std::ostream& os, const Value& v);
+std::ostream& operator<<(std::ostream& os, const List& list);
+std::ostream& operator<<(std::ostream& os, const Dict& dict);
+
+// --- Pretty-print List ---
+std::ostream& operator<<(std::ostream& os, const List& list) {
+    os << "[";
+    bool first = true;
+    for (const auto& v : list) {
+        if (!first) os << ", ";
+        os << v;
+        first = false;
+    }
+    os << "]";
+    return os;
+}
+
+// --- Pretty-print Dict ---
+std::ostream& operator<<(std::ostream& os, const Dict& dict) {
+    os << "{";
+    bool first = true;
+    for (const auto& [k, v] : dict) {
+        if (!first) os << ", ";
+        os << '"' << k << "\": " << v;
+        first = false;
+    }
+    os << "}";
+    return os;
+}
+
+// --- Pretty-print Value ---
+std::ostream& operator<<(std::ostream& os, const Value& v) {
+    std::visit(
+        [&](const auto& val) {
+            using T = std::decay_t<decltype(val)>;
+            if constexpr (std::is_same_v<T, std::monostate>) {
+                os << "null";
+            } else if constexpr (std::is_same_v<T, int> || std::is_same_v<T, double> || std::is_same_v<T, bool>) {
+                os << val;
+            } else if constexpr (std::is_same_v<T, std::string>) {
+                os << '"' << val << '"';
+            } else if constexpr (std::is_same_v<T, Bytes>) {
+                os << "bytes[" << val.size() << "]";
+            } else if constexpr (std::is_same_v<T, std::shared_ptr<List>>) {
+                if (val)
+                    os << *val;
+                else
+                    os << "null_list";
+            } else if constexpr (std::is_same_v<T, std::shared_ptr<Dict>>) {
+                if (val)
+                    os << *val;
+                else
+                    os << "null_dict";
+            }
+        },
+        v.data);
+    return os;
+}
+
 }  // namespace xconn

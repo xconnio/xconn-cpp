@@ -2,8 +2,10 @@
 #include <cstdint>
 #include <functional>
 #include <future>
+#include <iostream>
 #include <memory>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <variant>
@@ -101,6 +103,10 @@ inline std::shared_ptr<Dict> make_dict(std::initializer_list<std::pair<std::stri
     return dict;
 }
 
+std::ostream& operator<<(std::ostream& os, const Value& v);
+std::ostream& operator<<(std::ostream& os, const List& list);
+std::ostream& operator<<(std::ostream& os, const Dict& dict);
+
 template <typename T>
 std::optional<std::promise<T>> take_promise_from_map(int64_t request_id,
                                                      std::unordered_map<uint64_t, std::promise<T>>& promise_map,
@@ -178,6 +184,32 @@ struct UnregisterRequest {
 
     UnregisterRequest(uint64_t registration_id, std::promise<void> promise)
         : registration_id(registration_id), promise(std::move(promise)) {}
+};
+
+// PubSub
+
+struct Event {
+    List args;
+    Dict kwargs;
+    Dict details;
+
+    Event(void* c_event);
+};
+
+using EventHandler = std::function<void(const Event&)>;
+
+struct Subscription {
+    uint64_t subscription_id;
+    Session& session;
+
+    Subscription(Session& session, uint64_t subscription_id) : session(session), subscription_id(subscription_id) {}
+
+    void unsubscribe();
+};
+
+struct SubscribeRequest {
+    std::promise<Subscription> promise;
+    EventHandler handler;
 };
 
 };  // namespace xconn

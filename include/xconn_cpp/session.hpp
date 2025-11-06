@@ -99,6 +99,25 @@ class Session {
 
     PublishRequest Publish(const std::string& uri);
 
+    class SubscribeRequest {
+       public:
+        SubscribeRequest(Session& session, std::string topic, EventHandler handler);
+
+        SubscribeRequest& Option(std::string key, xconn::Value value);
+
+        Subscription Do() const;
+
+       private:
+        Session& session_;
+        std::string topic_;
+        EventHandler handler_;
+        Dict options_;
+    };
+
+    SubscribeRequest Subscribe(std::string topic, EventHandler handler);
+
+    void Unsubscribe(uint64_t subscription_id);
+
    private:
     std::unique_ptr<BaseSession> base_session_;
     wampproto_Session* wamp_session;
@@ -124,6 +143,12 @@ class Session {
 
     std::mutex publish_requests_mutex_;
     std::unordered_map<uint64_t, std::promise<void>> publish_requests_;
+
+    std::mutex subscribe_requests_mutex_;
+    std::unordered_map<uint64_t, xconn::SubscribeRequest> subscribe_requests_;
+
+    std::mutex subscriptions_mutex_;
+    std::unordered_map<uint64_t, EventHandler> subscriptions_;
 
     void send_message(Message* msg);
     void process_incoming_message(Message* msg);
