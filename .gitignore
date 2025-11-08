@@ -39,3 +39,8 @@
 
 # debug information files
 *.dwo
+build/*
+.vim/*
+.idea/*
+.cache/*
+compile_commands.json
