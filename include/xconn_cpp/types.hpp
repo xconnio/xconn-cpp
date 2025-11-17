@@ -1,4 +1,7 @@
 #pragma once
+#include <cstdint>
+#include <functional>
+#include <future>
 #include <memory>
 #include <optional>
 #include <string>
@@ -10,7 +13,8 @@ namespace xconn {
 
 enum class SerializerType { JSON = 1, MSGPACK = 2, CBOR = 3 };
 
-struct Value;  // forward declaration
+struct Value;   // forward declaration
+class Session;  // forward declaration
 
 using Bytes = std::vector<uint8_t>;
 using List = std::vector<Value>;
@@ -31,7 +35,13 @@ struct Value {
 
     Value() = default;
 
-    template <typename T>
+    Value(const Value&) = default;
+    Value(Value&&) noexcept = default;
+    Value& operator=(const Value&) = default;
+    Value& operator=(Value&&) noexcept = default;
+
+    template <typename T, typename Decayed = std::decay_t<T>,
+              typename = std::enable_if_t<!std::is_same_v<Decayed, Value> && std::is_constructible_v<VariantType, T>>>
     Value(T&& val) : data(std::forward<T>(val)) {}
 
     Value(int v) : data(v) {}
@@ -81,12 +91,83 @@ struct Value {
     bool is_null() const { return std::holds_alternative<std::monostate>(data); }
 };
 
+template <typename T>
+std::optional<std::promise<T>> take_promise_from_map(int64_t request_id,
+                                                     std::unordered_map<uint64_t, std::promise<T>>& promise_map,
+                                                     std::mutex& map_mutex) {
+    std::optional<std::promise<T>> maybe_promise;
+
+    {
+        std::lock_guard<std::mutex> lock(map_mutex);
+        auto it = promise_map.find(request_id);
+        if (it != promise_map.end()) {
+            maybe_promise = std::move(it->second);
+            promise_map.erase(it);
+        }
+    }
+
+    return maybe_promise;
+}
+
+template <typename T>
+std::optional<T> find_from_map(int64_t request_id, std::unordered_map<uint64_t, T>& map, std::mutex& map_mutex,
+                               bool erase) {
+    std::optional<T> maybe;
+
+    {
+        std::lock_guard<std::mutex> lock(map_mutex);
+        auto it = map.find(request_id);
+        if (it != map.end()) {
+            maybe = std::move(it->second);
+            if (erase) map.erase(it);
+        }
+    }
+
+    return maybe;
+}
+
+struct Invocation {
+    List args;
+    Dict kwargs;
+    Dict details;
+
+    Invocation(void* c_invocation);
+};
+
 struct Result {
     List args;
     Dict kwargs;
     Dict details;
 
     Result(void* c_result);
+    Result(const Invocation& invocation);
+};
+
+struct Registration {
+    uint64_t registration_id;
+    Session& session;
+
+    Registration(Session& session, uint64_t registration_id) : session(session), registration_id(registration_id) {}
+
+    void unregister();
+};
+
+using ProcedureHandler = std::function<Result(const Invocation&)>;
+
+struct RegisterRequest {
+    std::promise<Registration> promise;
+    ProcedureHandler handler;
+
+    RegisterRequest(std::promise<Registration> promise, ProcedureHandler handler)
+        : promise(std::move(promise)), handler(std::move(handler)) {}
+};
+
+struct UnregisterRequest {
+    std::promise<void> promise;
+    uint64_t registration_id;
+
+    UnregisterRequest(uint64_t registration_id, std::promise<void> promise)
+        : registration_id(registration_id), promise(std::move(promise)) {}
 };
 
 };  // namespace xconn

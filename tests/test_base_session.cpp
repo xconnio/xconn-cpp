@@ -38,26 +38,8 @@ void test_session_joiner_with_wampcra() {
 }
 
 int main() {
-    // test_session_joiner_with_ticket();
-    // test_session_joiner_with_wampcra();
-
-    std::cout << "===============" << std::endl;
-    ::Dict *dict = create_dict();
-    dict_insert(dict, "name", value_str("Ismail"));
-    dict_insert(dict, "age", value_int(38));
-
-    ::Value *v = value_from_dict(dict);
-
-    xconn::Value value = from_c_value(v);
-
-    if (auto dict_ptr = value.get_dict()) {
-        auto it = dict_ptr->find("age");
-        if (it != dict_ptr->end()) {
-            if (auto age = it->second.get_int()) {
-                std::cout << "Age: " << *age << "\n";
-            }
-        }
-    }
+    test_session_joiner_with_ticket();
+    test_session_joiner_with_wampcra();
 
     return 0;
 }

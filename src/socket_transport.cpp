@@ -51,7 +51,6 @@ bool SocketTransport::connect(const std::string& host, const std::string& port, 
             handshake_free(response);
             return false;
         }
-        std::cout << response->serializer << std::endl;
 
         handshake_free(hs);
         handshake_free(response);
@@ -70,7 +69,6 @@ bool SocketTransport::recv_exactly(uint8_t* buffer, size_t n) {
 }
 
 std::vector<uint8_t> SocketTransport::read() {
-    std::cout << "Socket::read" << std::endl;
     uint8_t header_bytes[4];
     if (!recv_exactly(header_bytes, 4)) return {};
 
@@ -90,7 +88,6 @@ std::vector<uint8_t> SocketTransport::read() {
 ::Bytes SocketTransport::read_bytes() {
     std::vector<uint8_t> data = read();
     std::string str(data.begin(), data.end());
-    std::cout << str << std::endl;
     ::Bytes bytes;
     bytes.len = data.size();
     bytes.data = static_cast<uint8_t*>(malloc(bytes.len));

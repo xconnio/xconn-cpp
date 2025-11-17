@@ -1,12 +1,16 @@
 #pragma once
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
+#include <cstdio>
 #include <future>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_map>
 
+#include "xconn_cpp/internal/thread_pool.hpp"
 #include "xconn_cpp/types.hpp"
 
 extern "C" {
@@ -17,7 +21,10 @@ typedef struct Message Message;
 
 namespace xconn {
 
+constexpr int TIMEOUT_SECONDS = 10;
+
 class BaseSession;
+class ThreadPool;
 
 class Session {
    public:
@@ -52,16 +59,47 @@ class Session {
 
     CallRequest Call(const std::string& uri);
 
+    class RegisterRequest {
+       public:
+        RegisterRequest(Session& session, std::string uri, ProcedureHandler handler);
+
+        RegisterRequest& Option(const std::string& key, const xconn::Value& value);
+
+        Registration Do() const;
+
+       private:
+        Session& session_;
+        std::string uri;
+        ProcedureHandler handler_;
+        Dict options;
+    };
+
+    RegisterRequest Register(const std::string& uri, ProcedureHandler handler);
+
+    void Unregister(uint64_t registration_id);
+
    private:
     std::unique_ptr<BaseSession> base_session_;
     wampproto_Session* wamp_session;
     IDGenerator* id_generator;
+
     std::thread recv_thread_;
     std::atomic<bool> running_{true};
     std::promise<int> goodbye_promise;
 
+    std::unique_ptr<ThreadPool> pool_;
+
     std::mutex call_requests_mutex_;
     std::unordered_map<uint64_t, std::promise<Result>> call_requests_;
+
+    std::mutex register_requests_mutex_;
+    std::unordered_map<uint64_t, xconn::RegisterRequest> register_requests_;
+
+    std::mutex registrations_mutex_;
+    std::unordered_map<uint64_t, ProcedureHandler> registrations_;
+
+    std::mutex unregister_requests_mutex_;
+    std::unordered_map<uint64_t, UnregisterRequest> unregister_requests_;
 
     void send_message(Message* msg);
     void process_incoming_message(Message* msg);
