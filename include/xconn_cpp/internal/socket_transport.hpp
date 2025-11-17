@@ -12,6 +12,7 @@
 
 #include <asio.hpp>
 
+namespace xconn {
 class SocketTransport {
    public:
     SocketTransport(asio::io_context& io, UrlParser& parser);
@@ -21,8 +22,8 @@ class SocketTransport {
     bool connect(const std::string& host, const std::string& port, xconn::SerializerType serializer_type,
                  int max_msg_size);
     std::vector<uint8_t> read();
-    Bytes read_bytes();
-    bool write(Bytes& bytes);
+    ::Bytes read_bytes();
+    bool write(::Bytes& bytes);
     void close();
     bool is_connected() const;
 
@@ -33,4 +34,4 @@ class SocketTransport {
     bool recv_exactly(uint8_t* buffer, size_t n);
 };
 
-void run();
+}  // namespace xconn

@@ -1,4 +1,0 @@
-#ifndef XCONN_CPP_CLIENT_H
-#define XCONN_CPP_CLIENT_H
-
-#endif  // XCONN_CPP_CLIENT_H

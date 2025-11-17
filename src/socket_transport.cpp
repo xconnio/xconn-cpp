@@ -11,6 +11,8 @@
 #include "xconn_cpp/types.hpp"
 #include "xconn_cpp/url_parser.hpp"
 
+namespace xconn {
+
 SocketTransport::SocketTransport(asio::io_context& io, UrlParser& url) : transport_(create_transport(io, url)) {}
 
 SocketTransport::~SocketTransport() { close(); }
@@ -27,7 +29,7 @@ bool SocketTransport::connect(const std::string& host, const std::string& port, 
         transport_->connect(host, port);
 
         uint8_t hs_request[4];
-        SerializerType c_serializer_type = (SerializerType)serializer_type;
+        ::SerializerType c_serializer_type = (::SerializerType)serializer_type;
         Handshake* hs = handshake_new(c_serializer_type, max_msg_size);
         if (send_handshake(hs, hs_request) != 0) {
             handshake_free(hs);
@@ -68,6 +70,7 @@ bool SocketTransport::recv_exactly(uint8_t* buffer, size_t n) {
 }
 
 std::vector<uint8_t> SocketTransport::read() {
+    std::cout << "Socket::read" << std::endl;
     uint8_t header_bytes[4];
     if (!recv_exactly(header_bytes, 4)) return {};
 
@@ -84,11 +87,11 @@ std::vector<uint8_t> SocketTransport::read() {
     return payload;
 }
 
-Bytes SocketTransport::read_bytes() {
+::Bytes SocketTransport::read_bytes() {
     std::vector<uint8_t> data = read();
     std::string str(data.begin(), data.end());
     std::cout << str << std::endl;
-    Bytes bytes;
+    ::Bytes bytes;
     bytes.len = data.size();
     bytes.data = static_cast<uint8_t*>(malloc(bytes.len));
     memcpy(bytes.data, data.data(), bytes.len);
@@ -96,7 +99,7 @@ Bytes SocketTransport::read_bytes() {
     return bytes;
 }
 
-bool SocketTransport::write(Bytes& bytes) {
+bool SocketTransport::write(::Bytes& bytes) {
     std::lock_guard<std::mutex> lock(write_mutex_);
 
     std::cout << bytes.data << std::endl;
@@ -124,3 +127,4 @@ bool SocketTransport::write(Bytes& bytes) {
 void SocketTransport::close() { transport_->close(); }
 
 bool SocketTransport::is_connected() const { return transport_->is_connected(); }
+}  // namespace xconn

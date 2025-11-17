@@ -2,9 +2,13 @@
 
 #include "xconn_cpp/internal/socket_transport.hpp"
 
+namespace xconn {
+
 class BaseSession {
    public:
-    BaseSession(std::shared_ptr<SocketTransport> transport, SessionDetails* session_details, Serializer* serializer);
+    BaseSession(std::shared_ptr<SocketTransport> transport, const SessionDetails* session_details,
+                Serializer* serializer);
+    Serializer* serializer;
 
     std::shared_ptr<SocketTransport> transport() const;
     uint64_t id() const;
@@ -13,8 +17,8 @@ class BaseSession {
     const char* authrole() const;
 
     // Core methods
-    void send(Bytes& bytes);
-    Bytes receive();
+    void send(::Bytes& bytes);
+    ::Bytes receive();
 
     void send_message(const Message* msg);
     Message* receive_message();
@@ -23,6 +27,7 @@ class BaseSession {
 
    private:
     std::shared_ptr<SocketTransport> transport_;
-    SessionDetails* session_details_;
-    Serializer* serializer_;
+    const SessionDetails* session_details_;
 };
+
+}  // namespace xconn

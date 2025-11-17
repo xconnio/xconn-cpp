@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+namespace xconn {
+
 class Transport {
    public:
     virtual ~Transport() = default;
@@ -17,3 +19,5 @@ class Transport {
 
     virtual bool is_connected() const = 0;
 };
+
+}  // namespace xconn

@@ -2,6 +2,8 @@
 
 #include <string>
 
+namespace xconn {
+
 struct UrlParser {
     std::string scheme;
     std::string host;
@@ -9,3 +11,5 @@ struct UrlParser {
 };
 
 UrlParser parse_url(const std::string& url);
+
+}  // namespace xconn

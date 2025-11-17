@@ -6,6 +6,8 @@
 
 #include <asio.hpp>
 
+namespace xconn {
+
 class TcpTransport : public Transport {
    public:
     explicit TcpTransport(asio::io_context& io) : socket_(io) {}
@@ -53,3 +55,5 @@ class TcpTransport : public Transport {
    private:
     asio::ip::tcp::socket socket_;
 };
+
+}  // namespace xconn

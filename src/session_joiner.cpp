@@ -9,7 +9,9 @@
 #include "xconn_cpp/types.hpp"
 #include "xconn_cpp/url_parser.hpp"
 
-SessionJoiner::SessionJoiner(xconn::Authenticator authenticator, xconn::SerializerType serializer_type)
+namespace xconn {
+
+SessionJoiner::SessionJoiner(Authenticator authenticator, SerializerType serializer_type)
     : authenticator_(authenticator), serializer_type_(serializer_type), serializer_(nullptr) {
     switch (serializer_type_) {
         case xconn::SerializerType::JSON:
@@ -26,7 +28,7 @@ SessionJoiner::SessionJoiner(xconn::Authenticator authenticator, xconn::Serializ
     }
 }
 
-SessionJoiner::~SessionJoiner() { free(serializer_); }
+SessionJoiner::~SessionJoiner() {}
 
 std::unique_ptr<BaseSession> SessionJoiner::join(std::string& uri, std::string& realm) {
     auto transport = SocketTransport::Create(uri);
@@ -35,13 +37,13 @@ std::unique_ptr<BaseSession> SessionJoiner::join(std::string& uri, std::string& 
     transport->connect(parser.host, parser.port, serializer_type_, MAX_MSG_SIZE);
 
     Joiner* joiner = joiner_new(realm.c_str(), serializer_, authenticator_.authenticator);
-    Bytes hello = joiner->send_hello(joiner);
+    ::Bytes hello = joiner->send_hello(joiner);
     transport->write(hello);
 
     while (true) {
-        Bytes bytes = transport->read_bytes();
+        ::Bytes bytes = transport->read_bytes();
 
-        Bytes to_send = joiner->receive(joiner, bytes);
+        ::Bytes to_send = joiner->receive(joiner, bytes);
 
         if (to_send.len == 0) {
             std::cout << "Successfully created WAMP Session" << std::endl;
@@ -50,3 +52,5 @@ std::unique_ptr<BaseSession> SessionJoiner::join(std::string& uri, std::string& 
         transport->write(to_send);
     }
 }
+
+}  // namespace xconn

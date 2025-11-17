@@ -3,23 +3,27 @@
 #include "xconn_cpp/authenticators.hpp"
 #include "xconn_cpp/types.hpp"
 
-class BaseSession;
-
 extern "C" {
 typedef struct Serializer Serializer;
 }
+
+namespace xconn {
+
+class BaseSession;
 
 constexpr std::size_t MAX_MSG_SIZE = (1 << 24);
 
 class SessionJoiner {
    public:
-    SessionJoiner(xconn::Authenticator authenticator, xconn::SerializerType serializer_type);
+    SessionJoiner(Authenticator authenticator, SerializerType serializer_type);
     ~SessionJoiner();
 
     std::unique_ptr<BaseSession> join(std::string& uri, std::string& realm);
 
    private:
-    xconn::Authenticator authenticator_;
-    xconn::SerializerType serializer_type_;
+    Authenticator authenticator_;
+    SerializerType serializer_type_;
     Serializer* serializer_;
 };
+
+}  // namespace xconn

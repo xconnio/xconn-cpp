@@ -6,6 +6,8 @@
 
 #include <asio.hpp>
 
+namespace xconn {
+
 class UnixTransport : public Transport {
    public:
     explicit UnixTransport(asio::io_context& io) : socket_(io) {}
@@ -49,3 +51,5 @@ class UnixTransport : public Transport {
    private:
     asio::local::stream_protocol::socket socket_;
 };
+
+}  // namespace xconn
