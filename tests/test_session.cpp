@@ -17,9 +17,9 @@ void test_subscripiton_request();
 void test_all_authenticator_and_serializers();
 
 int main() {
-    // test_client_session_lifecycle();
-    // test_call_request();
-    // test_subscripiton_request();
+    test_client_session_lifecycle();
+    test_call_request();
+    test_subscripiton_request();
     test_all_authenticator_and_serializers();
 
     return 0;
@@ -64,8 +64,8 @@ ProcedureHandler procedure_handler = [](const Invocation& invocation) -> Result 
     int num2 = 0;
     auto args = invocation.args;
     if (args.size() == 2) {
-        num1 = args[0].get_int().value();
-        num2 = args[1].get_int().value();
+        num1 = args[0].get_int64().value();
+        num2 = args[1].get_int64().value();
     }
 
     Result result = Result(invocation);
@@ -75,20 +75,30 @@ ProcedureHandler procedure_handler = [](const Invocation& invocation) -> Result 
 };
 
 void test_call_request() {
-    auto client = std::make_unique<Client>(TicketAuthenticator(ticket_auth_id, ticket, Dict()), SerializerType::JSON);
+    auto client = std::make_unique<Client>(AnonymousAuthenticator("john", Dict()), SerializerType::JSON);
 
     auto session = client->connect(url, realm);
 
-    Result r = session->Call(procedure).Arg(2).Arg(4).Do();
+    auto registration = session->Register(call_procedure, procedure_handler).Do();
 
-    int sum = r.args[0].get_int().value();
+    auto result = session->Call(call_procedure).Arg(num1).Arg(num2).Do();
 
-    assert(sum == 6);
+    int sum = 0;
+    if (result.args.size() > 0) sum = result.args[0].get_int64().value();
+
+    assert(sum == total);
+
+    registration.unregister();
+
+    session->leave();
+
+    assert(!session->is_connected());
 }
 
 int expected_age = 25;
 void test_subscripiton_request() {
     auto client = std::make_unique<Client>(CryptosignAuthenticator(cryptosign_auth_id, private_key_hex, Dict()),
+
                                            SerializerType::JSON);
 
     auto session = client->connect(url, realm);
@@ -97,7 +107,7 @@ void test_subscripiton_request() {
     auto subscription = session
                             ->Subscribe("xconn.io.subscribe",
                                         [&invoked](const Event& event) {
-                                            auto age = event.kwargs.at("age").get_int();
+                                            auto age = event.kwarg_int("age");
                                             if (age) assert(age == expected_age);
                                             invoked = true;
                                         })
@@ -150,7 +160,7 @@ void test_all_authenticator_and_serializers() {
 
             Result result = session->Call(procedure).Arg(2).Arg(4).Do();
 
-            int sum = result.args[0].get_int().value();
+            int sum = result.arg_int(0).value();
 
             assert(sum == 6);
 

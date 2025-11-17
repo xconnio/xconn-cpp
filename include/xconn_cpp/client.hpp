@@ -14,7 +14,7 @@ class Client {
     SerializerType serializer_type;
 
     Client(Authenticator authenticator, SerializerType serializer_type)
-        : authenticator(authenticator), serializer_type(serializer_type) {}
+        : authenticator(std::move(authenticator)), serializer_type(serializer_type) {}
 
     ~Client();
 
