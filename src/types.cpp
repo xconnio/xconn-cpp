@@ -1,11 +1,8 @@
 #include "xconn_cpp/types.hpp"
 
-#include <iostream>
 #include <type_traits>
 
 #include "wampproto.h"
-#include "wampproto/messages/invocation.h"
-#include "wampproto/value.h"
 
 namespace xconn {
 
@@ -36,7 +33,9 @@ namespace xconn {
 
             if constexpr (std::is_same_v<T, std::monostate>)
                 return ::value_null();
-            else if constexpr (std::is_same_v<T, int>)
+            else if constexpr (std::is_same_v<T, int64_t>)
+                return ::value_int(value);
+            else if constexpr (std::is_same_v<T, uint64_t>)
                 return ::value_int(value);
             else if constexpr (std::is_same_v<T, double>)
                 return ::value_float(value);
@@ -94,14 +93,14 @@ Dict from_c_dict(const ::Dict* c_dict) {
 }
 
 Value from_c_value(const ::Value* v) {
-    if (!v) return Value{};  // monostate
+    if (!v) return Value{};
 
     switch (v->type) {
         case VALUE_NULL:
             return std::monostate{};
 
         case VALUE_INT:
-            return static_cast<int>(v->int_val);
+            return static_cast<int64_t>(v->int_val);
 
         case VALUE_FLOAT:
             return v->float_val;
@@ -126,20 +125,81 @@ Value from_c_value(const ::Value* v) {
     }
 }
 
-Result::Result(void* c_result) {
-    ::Result* result = (::Result*)c_result;
-    args = from_c_list(result->args);
-    kwargs = from_c_dict(result->kwargs);
-    details = from_c_dict(result->details);
+std::ostream& operator<<(std::ostream& os, const List& list) {
+    os << "[";
+    bool first = true;
+    for (const auto& v : list) {
+        if (!first) os << ", ";
+        os << v;
+        first = false;
+    }
+    os << "]";
+    return os;
 }
 
-Result::Result(const Invocation& invocation) {}
-
-Invocation::Invocation(void* c_invocation) {
-    ::Invocation* invocation = (::Invocation*)c_invocation;
-    args = from_c_list(invocation->args);
-    kwargs = from_c_dict(invocation->kwargs);
-    details = from_c_dict(invocation->details);
+// --- Pretty-print Dict ---
+std::ostream& operator<<(std::ostream& os, const Dict& dict) {
+    os << "{";
+    bool first = true;
+    for (const auto& [k, v] : dict) {
+        if (!first) os << ", ";
+        os << '"' << k << "\": " << v;
+        first = false;
+    }
+    os << "}";
+    return os;
 }
+
+// --- Pretty-print Value ---
+std::ostream& operator<<(std::ostream& os, const Value& v) {
+    std::visit(
+        [&](const auto& val) {
+            using T = std::decay_t<decltype(val)>;
+            if constexpr (std::is_same_v<T, std::monostate>) {
+                os << "null";
+            } else if constexpr (std::is_same_v<T, int> || std::is_same_v<T, double> || std::is_same_v<T, bool>) {
+                os << val;
+            } else if constexpr (std::is_same_v<T, std::string>) {
+                os << '"' << val << '"';
+            } else if constexpr (std::is_same_v<T, Bytes>) {
+                os << "bytes[" << val.size() << "]";
+            } else if constexpr (std::is_same_v<T, std::shared_ptr<List>>) {
+                if (val)
+                    os << *val;
+                else
+                    os << "null_list";
+            } else if constexpr (std::is_same_v<T, std::shared_ptr<Dict>>) {
+                if (val)
+                    os << *val;
+                else
+                    os << "null_dict";
+            }
+        },
+        v.data);
+    return os;
+}
+
+Result::Result(void* c_result)
+    : Result(from_c_list(((::Result*)c_result)->args), from_c_dict(((::Result*)c_result)->kwargs),
+             from_c_dict(((::Result*)c_result)->details)) {}
+
+Result::Result(List args_, Dict kwargs_, Dict details_)
+    : ArgsHelper(std::move(args_)), KwargsHelper(std::move(kwargs_)), details(std::move(details_)) {}
+
+Result::Result(const Invocation& invocation) : Result(invocation.args, invocation.kwargs, invocation.details) {}
+
+Invocation::Invocation(void* c_invocation)
+    : Invocation(from_c_list(((::Invocation*)c_invocation)->args), from_c_dict(((::Invocation*)c_invocation)->kwargs),
+                 from_c_dict(((::Invocation*)c_invocation)->details)) {}
+
+Invocation::Invocation(List args_, Dict kwargs_, Dict details_)
+    : ArgsHelper(std::move(args_)), KwargsHelper(std::move(kwargs_)), details(std::move(details_)) {}
+
+Event::Event(void* c_event)
+    : Event(from_c_list(((::Event*)c_event)->args), from_c_dict(((::Event*)c_event)->kwargs),
+            from_c_dict(((::Event*)c_event)->details)) {}
+
+Event::Event(List args_, Dict kwargs_, Dict details_)
+    : ArgsHelper(std::move(args_)), KwargsHelper(std::move(kwargs_)), details(std::move(details_)) {}
 
 }  // namespace xconn

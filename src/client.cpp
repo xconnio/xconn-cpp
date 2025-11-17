@@ -1,6 +1,5 @@
 #include "xconn_cpp/client.hpp"
 
-#include <iostream>
 #include <memory>
 
 #include "xconn_cpp/internal/base_session.hpp"

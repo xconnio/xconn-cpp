@@ -1,14 +1,14 @@
 #pragma once
 #include <atomic>
 #include <cstddef>
-#include <cstdint>
-#include <cstdio>
 #include <future>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_map>
+
+#include <sys/types.h>
 
 #include "xconn_cpp/internal/thread_pool.hpp"
 #include "xconn_cpp/types.hpp"
@@ -22,6 +22,7 @@ typedef struct Message Message;
 namespace xconn {
 
 constexpr int TIMEOUT_SECONDS = 10;
+constexpr const char* ERROR_RUNTIME_ERROR = "wamp.error.runtime_error";
 
 class BaseSession;
 class ThreadPool;
@@ -43,40 +44,80 @@ class Session {
        public:
         CallRequest(Session& session, std::string uri);
 
-        CallRequest& Arg(const xconn::Value& arg);
-        CallRequest& Kwarg(const std::string& key, const xconn::Value& value);
-        CallRequest& Option(const std::string& key, const xconn::Value& value);
+        CallRequest& Arg(xconn::Value arg);
+        CallRequest& Kwarg(std::string key, xconn::Value value);
+        CallRequest& Option(std::string key, xconn::Value value);
 
         Result Do() const;
 
        private:
         Session& session_;
-        std::string uri;
-        List args;
-        Dict kwargs;
-        Dict options;
+        std::string procedure_;
+        List args_;
+        Dict kwargs_;
+        Dict options_;
     };
 
-    CallRequest Call(const std::string& uri);
+    CallRequest Call(std::string uri);
 
     class RegisterRequest {
        public:
         RegisterRequest(Session& session, std::string uri, ProcedureHandler handler);
 
-        RegisterRequest& Option(const std::string& key, const xconn::Value& value);
+        RegisterRequest& Option(std::string key, xconn::Value value);
 
         Registration Do() const;
 
        private:
         Session& session_;
-        std::string uri;
+        std::string procedure_;
         ProcedureHandler handler_;
         Dict options;
     };
 
-    RegisterRequest Register(const std::string& uri, ProcedureHandler handler);
+    RegisterRequest Register(std::string procedure, ProcedureHandler handler);
 
     void Unregister(uint64_t registration_id);
+
+    class PublishRequest {
+       public:
+        PublishRequest(Session& session, std::string uri);
+
+        PublishRequest& Arg(xconn::Value arg);
+        PublishRequest& Kwarg(std::string key, xconn::Value value);
+        PublishRequest& Option(std::string key, xconn::Value value);
+        PublishRequest& Acknowledge(bool value);
+
+        void Do() const;
+
+       private:
+        Session& session_;
+        std::string topic_;
+        List args_;
+        Dict kwargs_;
+        Dict options_;
+    };
+
+    PublishRequest Publish(std::string topic);
+
+    class SubscribeRequest {
+       public:
+        SubscribeRequest(Session& session, std::string topic, EventHandler handler);
+
+        SubscribeRequest& Option(std::string key, xconn::Value value);
+
+        Subscription Do() const;
+
+       private:
+        Session& session_;
+        std::string topic_;
+        EventHandler handler_;
+        Dict options_;
+    };
+
+    SubscribeRequest Subscribe(std::string topic, EventHandler handler);
+
+    void Unsubscribe(uint64_t subscription_id);
 
    private:
     std::unique_ptr<BaseSession> base_session_;
@@ -85,7 +126,9 @@ class Session {
 
     std::thread recv_thread_;
     std::atomic<bool> running_{true};
+
     std::promise<int> goodbye_promise;
+    std::atomic<bool> goodbye_sent{false};
 
     std::unique_ptr<ThreadPool> pool_;
 
@@ -100,6 +143,18 @@ class Session {
 
     std::mutex unregister_requests_mutex_;
     std::unordered_map<uint64_t, UnregisterRequest> unregister_requests_;
+
+    std::mutex publish_requests_mutex_;
+    std::unordered_map<uint64_t, std::promise<void>> publish_requests_;
+
+    std::mutex subscribe_requests_mutex_;
+    std::unordered_map<uint64_t, xconn::SubscribeRequest> subscribe_requests_;
+
+    std::mutex subscriptions_mutex_;
+    std::unordered_map<uint64_t, EventHandler> subscriptions_;
+
+    std::mutex unsubscribe_requests_mutex_;
+    std::unordered_map<uint64_t, UnsubscribeRequest> unsubscribe_requests_;
 
     void send_message(Message* msg);
     void process_incoming_message(Message* msg);
