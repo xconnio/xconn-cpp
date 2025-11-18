@@ -55,80 +55,81 @@ struct Value {
               typename = std::enable_if_t<!std::is_same_v<Decayed, Value> && std::is_constructible_v<VariantType, T>>>
     Value(T&& val) : data(std::forward<T>(val)) {}
 
-    std::optional<int64_t> get_int64() const {
+    std::optional<int64_t> getInt64() const {
         if (std::holds_alternative<int64_t>(data)) return std::get<int64_t>(data);
         return std::nullopt;
     }
 
-    std::optional<uint64_t> get_uint64() const {
+    std::optional<uint64_t> getUInt64() const {
         if (std::holds_alternative<uint64_t>(data)) return std::get<uint64_t>(data);
         return std::nullopt;
     }
 
-    std::optional<double> get_double() const {
+    std::optional<double> getDouble() const {
         if (std::holds_alternative<double>(data)) return std::get<double>(data);
         return std::nullopt;
     }
 
-    std::optional<bool> get_bool() const {
+    std::optional<bool> getBool() const {
         if (std::holds_alternative<bool>(data)) return std::get<bool>(data);
         return std::nullopt;
     }
 
-    std::optional<std::string> get_string() const {
+    std::optional<std::string> getString() const {
         if (std::holds_alternative<std::string>(data)) return std::get<std::string>(data);
         return std::nullopt;
     }
 
-    std::optional<Bytes> get_bytes() const {
+    std::optional<Bytes> getBytes() const {
         if (std::holds_alternative<Bytes>(data)) return std::get<Bytes>(data);
         return std::nullopt;
     }
 
-    std::shared_ptr<List> get_list() const {
+    std::shared_ptr<List> getList() const {
         if (std::holds_alternative<std::shared_ptr<List>>(data)) return std::get<std::shared_ptr<List>>(data);
         return nullptr;
     }
 
-    std::shared_ptr<Dict> get_dict() const {
+    std::shared_ptr<Dict> getDict() const {
         if (std::holds_alternative<std::shared_ptr<Dict>>(data)) return std::get<std::shared_ptr<Dict>>(data);
         return nullptr;
     }
 
-    bool is_null() const { return std::holds_alternative<std::monostate>(data); }
+    bool isNull() const { return std::holds_alternative<std::monostate>(data); }
 };
 
 class Dict : public std::unordered_map<std::string, Value> {
    public:
     using std::unordered_map<std::string, Value>::unordered_map;
 
-    std::optional<Value> Get(const std::string& key) const {
+    std::optional<Value> get(const std::string& key) const {
         auto it = find(key);
         if (it == end()) return std::nullopt;
         return it->second;
     }
 
-    std::optional<std::string> String(const std::string& key) const { return Get(key)->get_string(); }
-    std::optional<bool> Bool(const std::string& key) const { return Get(key)->get_bool(); }
-    std::optional<int64_t> Int64(const std::string& key) const { return Get(key)->get_int64(); }
-    std::optional<uint64_t> UInt64(const std::string& key) const { return Get(key)->get_uint64(); }
-    std::optional<double> Double(const std::string& key) const { return Get(key)->get_double(); }
+    std::optional<std::string> getString(const std::string& key) const { return get(key)->getString(); }
+    std::optional<bool> getBool(const std::string& key) const { return get(key)->getBool(); }
+    std::optional<int64_t> getInt64(const std::string& key) const { return get(key)->getInt64(); }
+    std::optional<uint64_t> getUInt64(const std::string& key) const { return get(key)->getUInt64(); }
+    std::optional<double> getDouble(const std::string& key) const { return get(key)->getDouble(); }
+    std::optional<Bytes> getBytes(const std::string& key) const { return get(key)->getBytes(); }
 
-    std::optional<std::shared_ptr<List>> GetList(const std::string& key) const {
-        auto val = Get(key);
+    std::optional<std::shared_ptr<List>> getList(const std::string& key) const {
+        auto val = get(key);
         if (!val) return std::nullopt;
 
-        auto list = val->get_list();
+        auto list = val->getList();
         if (!list) return std::nullopt;
 
         return list;
     }
 
-    std::optional<std::shared_ptr<Dict>> GetDict(const std::string& key) const {
-        auto val = Get(key);
+    std::optional<std::shared_ptr<Dict>> getDict(const std::string& key) const {
+        auto val = get(key);
         if (!val) return std::nullopt;
 
-        auto dict = val->get_dict();
+        auto dict = val->getDict();
         if (!dict) return std::nullopt;
 
         return dict;
@@ -139,31 +140,33 @@ class List : public std::vector<Value> {
    public:
     using std::vector<Value>::vector;
 
-    std::optional<Value> Get(int index) const {
+    std::optional<Value> get(int index) const {
         if (index < 0 || index >= size()) return std::nullopt;
         return at(index);
     }
 
-    std::optional<std::string> String(int index) const { return Get(index)->get_string(); }
-    std::optional<bool> Bool(int index) const { return Get(index)->get_bool(); }
-    std::optional<int64_t> Int(int index) const { return Get(index)->get_int64(); }
-    std::optional<double> Double(int index) const { return Get(index)->get_double(); }
+    std::optional<std::string> getString(int index) const { return get(index)->getString(); }
+    std::optional<bool> getBool(int index) const { return get(index)->getBool(); }
+    std::optional<int64_t> getInt64(int index) const { return get(index)->getInt64(); }
+    std::optional<int64_t> getUInt64(int index) const { return get(index)->getUInt64(); }
+    std::optional<double> getDouble(int index) const { return get(index)->getDouble(); }
+    std::optional<Bytes> getBytes(int index) const { return get(index)->getBytes(); }
 
-    std::optional<std::shared_ptr<List>> GetList(int index) const {
-        auto val = Get(index);
+    std::optional<std::shared_ptr<List>> getList(int index) const {
+        auto val = get(index);
         if (!val) return std::nullopt;
 
-        auto list = val->get_list();
+        auto list = val->getList();
         if (!list) return std::nullopt;
 
         return list;
     }
 
-    std::optional<std::shared_ptr<Dict>> GetDict(int index) const {
-        auto val = Get(index);
+    std::optional<std::shared_ptr<Dict>> getDict(int index) const {
+        auto val = get(index);
         if (!val) return std::nullopt;
 
-        auto dict = val->get_dict();
+        auto dict = val->getDict();
         if (!dict) return std::nullopt;
 
         return dict;
@@ -241,20 +244,22 @@ class ArgsHelper {
    public:
     List args;
     explicit ArgsHelper(List args) : args(args) {}
-    std::optional<std::string> arg_string(int index) const { return args.String(index); }
-    std::optional<bool> arg_bool(int index) const { return args.Bool(index); }
-    std::optional<int> arg_int(int index) const { return args.Int(index); }
-    std::optional<double> arg_double(int index) const { return args.Double(index); }
+    std::optional<std::string> argString(int index) const { return args.getString(index); }
+    std::optional<bool> argBool(int index) const { return args.getBool(index); }
+    std::optional<int64_t> argInt64(int index) const { return args.getInt64(index); }
+    std::optional<uint64_t> argUInt64(int index) const { return args.getUInt64(index); }
+    std::optional<double> argDouble(int index) const { return args.getDouble(index); }
+    std::optional<Bytes> argBytes(int index) const { return args.getBytes(index); }
 
-    std::optional<std::shared_ptr<List>> arg_list(int index) const {
-        auto list = args.GetList(index);
+    std::optional<std::shared_ptr<List>> argList(int index) const {
+        auto list = args.getList(index);
         if (!list) return std::nullopt;
 
         return list;
     }
 
-    std::optional<std::shared_ptr<Dict>> arg_dict(int index) const {
-        auto dict = args.GetDict(index);
+    std::optional<std::shared_ptr<Dict>> argDict(int index) const {
+        auto dict = args.getDict(index);
         if (!dict) return std::nullopt;
 
         return dict;
@@ -265,20 +270,22 @@ class KwargsHelper {
    public:
     Dict kwargs;
     explicit KwargsHelper(Dict kwargs) : kwargs(kwargs) {}
-    std::optional<std::string> kwarg_string(const std::string& key) const { return kwargs.String(key); }
-    std::optional<bool> kwarg_bool(const std::string& key) const { return kwargs.Bool(key); }
-    std::optional<int64_t> kwarg_int(const std::string& key) const { return kwargs.Int64(key); }
-    std::optional<double> kwarg_double(const std::string& key) const { return kwargs.Double(key); }
+    std::optional<std::string> kwargString(const std::string& key) const { return kwargs.getString(key); }
+    std::optional<bool> kwargBool(const std::string& key) const { return kwargs.getBool(key); }
+    std::optional<int64_t> kwargInt64(const std::string& key) const { return kwargs.getInt64(key); }
+    std::optional<uint64_t> kwargUInt64(const std::string& key) const { return kwargs.getUInt64(key); }
+    std::optional<double> kwargDouble(const std::string& key) const { return kwargs.getDouble(key); }
+    std::optional<Bytes> kwargBytes(const std::string& key) const { return kwargs.getBytes(key); }
 
-    std::optional<std::shared_ptr<List>> kwarg_list(const std::string& key) const {
-        auto list = kwargs.GetList(key);
+    std::optional<std::shared_ptr<List>> kwargList(const std::string& key) const {
+        auto list = kwargs.getList(key);
         if (!list) return std::nullopt;
 
         return list;
     }
 
-    std::optional<std::shared_ptr<Dict>> kwarg_dict(const std::string& key) const {
-        auto dict = kwargs.GetDict(key);
+    std::optional<std::shared_ptr<Dict>> kwargDict(const std::string& key) const {
+        auto dict = kwargs.getDict(key);
         if (!dict) return std::nullopt;
 
         return dict;
@@ -297,6 +304,7 @@ class Result : public ArgsHelper, public KwargsHelper {
    public:
     Dict details;
 
+    Result();
     Result(void* c_result);
     Result(const Invocation& invocation);
     Result(List args_, Dict kwargs_, Dict details_);

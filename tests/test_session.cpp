@@ -15,12 +15,14 @@ void test_client_session_lifecycle();
 void test_call_request();
 void test_subscripiton_request();
 void test_all_authenticator_and_serializers();
+void test_bytes_over_network();
 
 int main() {
     test_client_session_lifecycle();
     test_call_request();
     test_subscripiton_request();
     test_all_authenticator_and_serializers();
+    test_bytes_over_network();
 
     return 0;
 }
@@ -47,6 +49,8 @@ void test_client_session_lifecycle() {
     auto session = client->connect(url, realm);
     Result result = session->Call(procedure).Arg(2).Arg(4).Do();
 
+    auto sum = result.argInt64(0).value();
+
     assert(session->session_id > 0);
     assert(session->auth_id == ticket_auth_id);
     assert(session->realm == realm);
@@ -60,31 +64,23 @@ int num2 = 5;
 int total = num1 + num2;
 
 ProcedureHandler procedure_handler = [](const Invocation& invocation) -> Result {
-    int num1 = 0;
-    int num2 = 0;
-    auto args = invocation.args;
-    if (args.size() == 2) {
-        num1 = args[0].get_int64().value();
-        num2 = args[1].get_int64().value();
-    }
+    int num1 = invocation.argInt64(0).value_or(0);
+    int num2 = invocation.argInt64(1).value_or(0);
 
-    Result result = Result(invocation);
+    Result result = Result();
     result.args = List{num1 + num2};
 
     return result;
 };
 
 void test_call_request() {
-    auto client = std::make_unique<Client>(AnonymousAuthenticator("john", Dict()), SerializerType::JSON);
-
-    auto session = client->connect(url, realm);
+    auto session = connectTicket(url, realm, ticket_auth_id, ticket);
 
     auto registration = session->Register(call_procedure, procedure_handler).Do();
 
     auto result = session->Call(call_procedure).Arg(num1).Arg(num2).Do();
 
-    int sum = 0;
-    if (result.args.size() > 0) sum = result.args[0].get_int64().value();
+    int sum = result.argInt64(0).value_or(0);
 
     assert(sum == total);
 
@@ -97,17 +93,13 @@ void test_call_request() {
 
 int expected_age = 25;
 void test_subscripiton_request() {
-    auto client = std::make_unique<Client>(CryptosignAuthenticator(cryptosign_auth_id, private_key_hex, Dict()),
-
-                                           SerializerType::JSON);
-
-    auto session = client->connect(url, realm);
+    auto session = connectCryptosign(url, realm, cryptosign_auth_id, private_key_hex);
 
     auto invoked = false;
     auto subscription = session
                             ->Subscribe("xconn.io.subscribe",
                                         [&invoked](const Event& event) {
-                                            auto age = event.kwarg_int("age");
+                                            auto age = event.kwargInt64("age");
                                             if (age) assert(age == expected_age);
                                             invoked = true;
                                         })
@@ -140,6 +132,7 @@ static std::string to_string(xconn::SerializerType type) {
 void test_all_authenticator_and_serializers() {
     std::vector<std::unique_ptr<Authenticator>> authenticators;
 
+    authenticators.push_back(std::make_unique<AnonymousAuthenticator>(""));
     authenticators.push_back(std::make_unique<CryptosignAuthenticator>(cryptosign_auth_id, private_key_hex));
     authenticators.push_back(std::make_unique<TicketAuthenticator>(ticket_auth_id, ticket));
     authenticators.push_back(std::make_unique<WAMPCRAAuthenticator>(wampcra_auth_id, secret));
@@ -160,11 +153,36 @@ void test_all_authenticator_and_serializers() {
 
             Result result = session->Call(procedure).Arg(2).Arg(4).Do();
 
-            int sum = result.arg_int(0).value();
+            int sum = result.argInt64(0).value();
 
             assert(sum == 6);
 
             session->leave();
         }
     }
+}
+
+std::string bytes_procedure = "xconn.io.bytes";
+void test_bytes_over_network() {
+    std::string echo_message = "echo";
+    auto session = connectWAMPCRA(url, realm, wampcra_salty_auth_id, salty_secret);
+
+    ProcedureHandler handler = [echo_message](const Invocation&) -> Result {
+        Result result = Result();
+        Bytes echo(echo_message.begin(), echo_message.end());
+        result.args = List{echo};
+
+        return result;
+    };
+
+    Registration registration = session->Register(bytes_procedure, handler).Do();
+    Result result = session->Call(bytes_procedure).Arg(Bytes(echo_message.begin(), echo_message.end())).Do();
+
+    Bytes response = result.argBytes(0).value();
+    assert(std::string(response.begin(), response.end()) == echo_message);
+
+    registration.unregister();
+    session->leave();
+
+    assert(!session->is_connected());
 }
