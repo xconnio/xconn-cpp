@@ -422,7 +422,7 @@ void Session::PublishRequest::Do() const {
     auto acknowledge = false;
 
     auto it = options_.find("acknowledge");
-    if (it != options_.end()) acknowledge = it->second.get_bool().value();
+    if (it != options_.end()) acknowledge = it->second.getBool().value();
 
     if (acknowledge) {
         std::lock_guard<std::mutex> lock(session_.publish_requests_mutex_);

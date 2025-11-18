@@ -1,5 +1,3 @@
 #pragma once
 
-namespace identifier {
-class BaseSession;
-}
+namespace xconn {}  // namespace xconn

@@ -186,6 +186,7 @@ Result::Result(void* c_result)
 Result::Result(List args_, Dict kwargs_, Dict details_)
     : ArgsHelper(std::move(args_)), KwargsHelper(std::move(kwargs_)), details(std::move(details_)) {}
 
+Result::Result() : ArgsHelper(List{}), KwargsHelper(Dict{}) {}
 Result::Result(const Invocation& invocation) : Result(invocation.args, invocation.kwargs, invocation.details) {}
 
 Invocation::Invocation(void* c_invocation)
