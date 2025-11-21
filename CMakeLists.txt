@@ -1,24 +1,20 @@
 cmake_minimum_required(VERSION 3.18)
 project(
-  xconn_cpp
+  xconn
   VERSION 1.0
   LANGUAGES CXX)
 
+# -------------------------
+# Project Settings
+# -------------------------
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+include(GNUInstallDirs)
 
-file(GLOB_RECURSE XCONN_CPP_SOURCES src/*.cpp)
-
-# Add the library
-add_library(xconn_cpp STATIC ${XCONN_CPP_SOURCES})
-# target_include_directories(xconn_cpp PUBLIC
-# ${CMAKE_CURRENT_SOURCE_DIR}/include)
-target_include_directories(
-  xconn_cpp
-  PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/xconn_cpp/internal)
-
+# -------------------------
+# Formatting & Linting
+# -------------------------
 find_program(CLANG_FORMAT_EXE NAMES clang-format)
 if(CLANG_FORMAT_EXE)
   message(STATUS "Found clang-format: ${CLANG_FORMAT_EXE}")
@@ -36,7 +32,7 @@ if(CLANG_FORMAT_EXE)
     xconn_format
     COMMAND ${CLANG_FORMAT_EXE} -i -style=file ${ALL_SOURCE_FILES}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Running clang-format on xconn_cpp source files")
+    COMMENT "Running clang-format on xconn source files")
 endif()
 
 find_program(CLANG_TIDY_EXE NAMES clang-tidy)
@@ -51,34 +47,87 @@ if(CLANG_TIDY_EXE)
     xconn_lint
     COMMAND ${CLANG_TIDY_EXE} -p ${CMAKE_BINARY_DIR} ${ALL_SOURCE_FILES}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    COMMENT "Running clang-tidy on xconn_cpp source files")
+    COMMENT "Running clang-tidy on xconn source files")
 endif()
 
-include(FetchContent)
-FetchContent_Declare(
-  wampproto
-  GIT_REPOSITORY https://github.com/xconnio/wampproto-c.git
-  GIT_TAG tinycbor)
+# -------------------------
+# Sources & Library
+# -------------------------
 
-set(WAMMPROTO_BUILD_TESTS
-    OFF
-    CACHE BOOL "" FORCE)
+file(GLOB_RECURSE XCONN_CPP_SOURCES src/*.cpp)
+add_library(xconn STATIC ${XCONN_CPP_SOURCES})
 
-FetchContent_MakeAvailable(wampproto)
-target_link_libraries(xconn_cpp PRIVATE wampproto)
+# -------------------------
+# Dependencies
+# -------------------------
 
-# Test runner / entrypoint
+find_package(wampproto REQUIRED)
+
+# -------------------------
+# Target Configuration
+# -------------------------
+
+target_include_directories(
+  xconn
+  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+         $<INSTALL_INTERFACE:include>
+  PRIVATE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/xconn/internal>)
+
+target_link_libraries(xconn PUBLIC wampproto)
+
+# -------------------------
+# Installation
+# -------------------------
+
+install(
+  TARGETS xconn
+  EXPORT xconnTargets
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  INCLUDES
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+# -------------------------
+# Tests
+# -------------------------
 option(XCONN_BUILD_TESTS "Build test runner" ON)
 if(XCONN_BUILD_TESTS)
   enable_testing()
 
   add_executable(test_session tests/test_session.cpp)
-  target_link_libraries(test_session PRIVATE xconn_cpp)
+  target_link_libraries(test_session PRIVATE xconn)
   target_include_directories(test_session PRIVATE include)
   add_test(NAME test_session COMMAND test_session)
 
   add_executable(test_base_session tests/test_base_session.cpp)
-  target_link_libraries(test_base_session PRIVATE xconn_cpp wampproto)
+  target_link_libraries(test_base_session PRIVATE xconn wampproto)
   target_include_directories(test_base_session PRIVATE include)
   add_test(NAME test_base_session COMMAND test_base_session)
 endif()
+
+# -------------------------
+# CMake Package Config
+# -------------------------
+include(CMakePackageConfigHelpers)
+
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/xconnConfigVersion.cmake"
+  VERSION 0.1.0
+  COMPATIBILITY SameMajorVersion)
+
+install(
+  EXPORT xconnTargets
+  FILE xconnTargets.cmake
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/xconn)
+
+configure_package_config_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/xconnConfig.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/xconnConfig.cmake"
+  INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/xconn)
+
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/xconnConfig.cmake"
+              "${CMAKE_CURRENT_BINARY_DIR}/xconnConfigVersion.cmake"
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/xconn)
