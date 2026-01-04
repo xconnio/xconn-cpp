@@ -25,6 +25,7 @@ class SocketTransport {
     ::Bytes read_bytes();
     bool write(::Bytes& bytes);
     void close();
+    void shutdown();
     bool is_connected() const;
 
    private:

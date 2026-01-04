@@ -16,6 +16,7 @@ class Transport {
     virtual std::size_t write(const uint8_t* data, std::size_t length) = 0;
 
     virtual std::size_t close() = 0;
+    virtual std::size_t shutdown() = 0;
 
     virtual bool is_connected() const = 0;
 };

@@ -4,6 +4,7 @@
 #include <future>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -23,6 +24,12 @@ namespace xconn {
 
 constexpr int TIMEOUT_SECONDS = 10;
 constexpr const char* ERROR_RUNTIME_ERROR = "wamp.error.runtime_error";
+
+enum class SessionState {
+    CONNECTED,
+    LEAVING,
+    DISCONNECTED,
+};
 
 class BaseSession;
 class ThreadPool;
@@ -125,9 +132,10 @@ class Session {
     IDGenerator* id_generator;
 
     std::thread recv_thread_;
-    std::atomic<bool> running_{true};
+    std::atomic<SessionState> state_{SessionState::CONNECTED};
 
-    std::promise<int> goodbye_promise;
+    std::mutex send_mutex_;
+    std::optional<std::promise<int>> goodbye_promise_;
     std::atomic<bool> goodbye_sent{false};
 
     std::unique_ptr<ThreadPool> pool_;
