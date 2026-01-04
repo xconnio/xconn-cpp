@@ -1,0 +1,7 @@
+[submodule "vendor/wampproto"]
+	path = vendor/wampproto
+	url = git@github.com:xconnio/wampproto-c.git
+	branch = vendor
+[submodule "vendor/asio"]
+	path = vendor/asio
+	url = https://github.com/chriskohlhoff/asio.git

@@ -40,7 +40,9 @@
 # debug information files
 *.dwo
 build/*
+buildat/*
 .vim/*
 .idea/*
 .cache/*
 compile_commands.json
+xconn-aat-setup/
