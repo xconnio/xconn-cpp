@@ -16,6 +16,8 @@
 #include "xconn_cpp/internal/types.hpp"
 #include "xconn_cpp/types.hpp"
 
+#include "asio/error.hpp"
+
 namespace xconn {
 
 Session::Session(std::unique_ptr<BaseSession> base_session)
@@ -33,33 +35,59 @@ Session::Session(std::unique_ptr<BaseSession> base_session)
 }
 
 Session::~Session() {
-    if (is_connected()) base_session_->close();
-    running_ = false;
+    SessionState prev = state_.exchange(SessionState::DISCONNECTED);
+    if (prev == SessionState::CONNECTED) {
+        try {
+            base_session_->shutdown();
+        } catch (...) {
+        }
+    }
+
     if (recv_thread_.joinable()) recv_thread_.join();
+
+    try {
+        base_session_->close();
+    } catch (...) {
+    }
 }
 
 int Session::leave() {
-    std::string reason = "wamp.close.close_realm";
-    Goodbye* goodbye = goodbye_new(create_dict(), reason.c_str());
-
-    std::future<int> future = goodbye_promise.get_future();
-
-    send_message((Message*)goodbye);
-    goodbye_sent = true;
-
-    return wait_with_timeout(future, TIMEOUT_SECONDS);
-}
-
-bool Session::is_connected() { return running_; }
-
-void Session::send_message(Message* msg) {
-    ::Bytes bytes = wamp_session->send_message(wamp_session, msg);
-    if (is_connected()) {
-        base_session_->send(bytes);
-        return;
+    SessionState expected = SessionState::CONNECTED;
+    if (!state_.compare_exchange_strong(expected, SessionState::LEAVING)) {
+        return expected == SessionState::DISCONNECTED ? -1 : 0;
     }
 
-    throw std::runtime_error("Connection closed");
+    try {
+        goodbye_promise_.emplace();
+        std::future<int> future = goodbye_promise_->get_future();
+
+        std::string reason = "wamp.close.close_realm";
+        Goodbye* goodbye = goodbye_new(create_dict(), reason.c_str());
+        send_message((Message*)goodbye);
+        goodbye_sent = true;
+
+        return wait_with_timeout(future, TIMEOUT_SECONDS);
+    } catch (const std::exception& e) {
+        state_.store(SessionState::DISCONNECTED);
+        return -1;
+    }
+}
+
+void Session::send_message(Message* msg) {
+    std::lock_guard<std::mutex> lock(send_mutex_);
+
+    if (state_.load() == SessionState::DISCONNECTED) {
+        throw std::runtime_error("Connection closed");
+    }
+
+    ::Bytes bytes = wamp_session->send_message(wamp_session, msg);
+
+    try {
+        base_session_->send(bytes);
+    } catch (const std::exception& e) {
+        state_.store(SessionState::DISCONNECTED);
+        throw;
+    }
 }
 
 void Session::process_incoming_message(Message* msg) {
@@ -71,9 +99,8 @@ void Session::process_incoming_message(Message* msg) {
                 send_message((Message*)goodbye);
                 goodbye_sent = true;
             }
-            goodbye_promise.set_value(0);
-            running_ = false;
-            base_session_->close();
+            if (goodbye_promise_.has_value()) goodbye_promise_->set_value(0);
+            state_.store(SessionState::DISCONNECTED);
             break;
         }
         case MESSAGE_TYPE_RESULT: {
@@ -213,7 +240,7 @@ void Session::process_incoming_message(Message* msg) {
 
             auto app_error = ApplicationError(error->uri, from_c_list(error->args), from_c_dict(error->kwargs));
 
-            std::exception_ptr application_error = std::make_exception_ptr(std::runtime_error(app_error.what()));
+            std::exception_ptr application_error = std::make_exception_ptr(app_error);
 
             uint64_t request_id = error->request_id;
 
@@ -264,7 +291,7 @@ void Session::process_incoming_message(Message* msg) {
                     std::cout << "Result CODE: " << error->message_type << std::endl;
             }
 
-            throw std::runtime_error(error->uri);
+            throw app_error;
         }
 
         default: {
@@ -274,20 +301,29 @@ void Session::process_incoming_message(Message* msg) {
 }
 
 void Session::wait() {
-    while (running_) {
+    while (state_.load() != SessionState::DISCONNECTED) {
         try {
             Message* msg = base_session_->receive_message();
-            if (!msg) continue;
+            if (!msg) break;
 
             process_incoming_message(msg);
         } catch (const std::system_error& e) {
-            std::cerr << "System closed the connection" << std::endl;
+            if (e.code() != asio::error::eof) {
+                std::cerr << "System closed the connection" << std::endl;
+            }
+            break;
+        } catch (const ApplicationError& e) {
+            std::cout << e.what() << std::endl;
         } catch (const std::exception& e) {
             std::cerr << "Exception in wait(): " << e.what() << '\n';
+            break;
         } catch (...) {
             std::cerr << "Unknown exception in wait()" << std::endl;
+            break;
         }
     }
+
+    state_.store(SessionState::DISCONNECTED);
 }
 
 Session::CallRequest::CallRequest(Session& session, std::string procedure)
@@ -487,6 +523,8 @@ void Session::Unsubscribe(uint64_t subscription_id) {
 
     return wait_with_timeout(future, TIMEOUT_SECONDS);
 }
+
+bool Session::is_connected() { return state_.load() == SessionState::CONNECTED; }
 
 void Subscription::unsubscribe() { return session.Unsubscribe(subscription_id); }
 

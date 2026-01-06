@@ -49,5 +49,6 @@ Message* BaseSession::receive_message() {
 
 // Close the transport
 void BaseSession::close() { transport_->close(); }
+void BaseSession::shutdown() { transport_->shutdown(); }
 
 }  // namespace xconn

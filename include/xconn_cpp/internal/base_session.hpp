@@ -24,6 +24,7 @@ class BaseSession {
     Message* receive_message();
 
     void close();
+    void shutdown();
 
    private:
     std::shared_ptr<SocketTransport> transport_;

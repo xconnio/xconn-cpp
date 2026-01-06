@@ -1,27 +1,28 @@
 CMAKE_DIR := build
-NPROC := $(shell nproc 2>/dev/null || sysctl -n hw.ncpu)
 
 .PHONY: setup lint format test build clean
 
 setup:
 	sudo apt update
-	sudo apt install -y cmake clang-format clang-tidy build-essential libmsgpack-dev libcjson-dev cmake-format libsodium-dev uthash-dev libmbedtls-dev libasio-dev
+	sudo apt install -y cmake clang-format clang-tidy build-essential cmake-format
 
 build:
 	cmake -S . -B $(CMAKE_DIR) -DXCONN_BUILD_TESTS=OFF -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-	cmake --build $(CMAKE_DIR) -j$(NPROC)
+	cmake --build $(CMAKE_DIR) --parallel
 
-format: build
-	cmake --build $(CMAKE_DIR) --target xconn_format
+format:
+	cmake -S . -B $(CMAKE_DIR) -DCMAKE_BUILD_TYPE=XFormat -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+	cmake --build $(CMAKE_DIR) --target xconn_format --parallel
 	cmake-format -i CMakeLists.txt
 
-lint: build
-	cmake --build $(CMAKE_DIR) --target xconn_lint
+lint:
+	cmake -S . -B $(CMAKE_DIR) -DCMAKE_BUILD_TYPE=XLint -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+	cmake --build $(CMAKE_DIR) --target xconn_lint --parallel
 	cmake-lint CMakeLists.txt
 
 test:
 	cmake -S . -B $(CMAKE_DIR) -DXCONN_BUILD_TESTS=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-	cmake --build $(CMAKE_DIR) -j$(NPROC)
+	cmake --build $(CMAKE_DIR) --parallel
 	ctest --test-dir $(CMAKE_DIR) --output-on-failure -V
 
 clean:

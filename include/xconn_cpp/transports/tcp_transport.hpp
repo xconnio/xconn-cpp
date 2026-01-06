@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "asio/error.hpp"
 #include "transport.hpp"
 
 #include <asio.hpp>
@@ -41,11 +42,22 @@ class TcpTransport : public Transport {
 
     std::size_t close() override {
         std::error_code ec;
-        ec = socket_.shutdown(asio::ip::tcp::socket::shutdown_both, ec);
-        if (ec) throw std::system_error(ec);
 
-        ec = socket_.close(ec);
-        if (ec) throw std::system_error(ec);
+        if (socket_.is_open()) {
+            ec = socket_.close(ec);
+            if (ec && ec != asio::error::not_connected) throw std::system_error(ec);
+        }
+
+        return 0;
+    }
+
+    std::size_t shutdown() override {
+        std::error_code ec;
+
+        if (socket_.is_open()) {
+            ec = socket_.shutdown(asio::ip::tcp::socket::shutdown_send, ec);
+            if (ec && ec != asio::error::not_connected) throw std::system_error(ec);
+        }
 
         return 0;
     }

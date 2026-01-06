@@ -123,6 +123,7 @@ bool SocketTransport::write(::Bytes& bytes) {
 }
 
 void SocketTransport::close() { transport_->close(); }
+void SocketTransport::shutdown() { transport_->shutdown(); }
 
 bool SocketTransport::is_connected() const { return transport_->is_connected(); }
 }  // namespace xconn
